@@ -1,19 +1,21 @@
-# Contributing
+# Участие в разработке
 
-## Development
+## Локальная проверка
 
 ```bash
 swift test
 python3 scripts/quality_gate.py
 ```
 
-Native app validation requires macOS 13 or newer and Google Chrome.
+Сборка интерфейса и WebKit требует macOS 13 или новее.
 
-## Pull requests
+## Требования к изменениям
 
-- keep the core deterministic;
-- do not add paid API or LLM dependencies for basic monitoring;
-- preserve the exact default continuation command;
-- add tests for every state-machine change;
-- document any new Chrome selectors and their fallback behavior;
-- do not weaken host validation or duplicate suppression.
+- сохранять детерминированную логику без внешнего ИИ;
+- не менять точный текст команды по умолчанию без отдельного решения;
+- добавлять тесты для каждого изменения автомата состояний;
+- сохранять защиту от повторной отправки;
+- не добавлять детектор технического лимита;
+- не возвращать зависимость от Chrome или Apple Events;
+- все пользовательские тексты писать по-русски;
+- документировать новые селекторы интерфейса ChatGPT.

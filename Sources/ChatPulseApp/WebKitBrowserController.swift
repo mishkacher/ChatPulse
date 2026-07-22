@@ -213,7 +213,7 @@ final class WebKitBrowserController: NSObject, BrowserControlling {
     """#
 
     private static let confirmSendJavaScript = #"""
-    (()=>{const command=__COMMAND_JSON__.replace(/\s+/g,' ').trim();const messages=[...document.querySelectorAll('[data-message-author-role]')];const last=messages.at(-1)||null;const role=(last?.getAttribute('data-message-author-role]')||'').toLowerCase();const text=(last?.innerText||last?.textContent||'').replace(/\s+/g,' ').trim();return role==='user'&&text===command?'confirmed':'not-confirmed';})()
+    (()=>{const command=__COMMAND_JSON__.replace(/\s+/g,' ').trim();const messages=[...document.querySelectorAll('[data-message-author-role]')];const last=messages.at(-1)||null;const role=(last?.getAttribute('data-message-author-role')||'').toLowerCase();const text=(last?.innerText||last?.textContent||'').replace(/\s+/g,' ').trim();return role==='user'&&text===command?'confirmed':'not-confirmed';})()
     """#
 }
 

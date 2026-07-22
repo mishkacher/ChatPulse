@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "ChatPulse.app can only be built on macOS." >&2
+  echo "ChatPulse.app можно собрать только на macOS." >&2
   exit 1
 fi
 
@@ -44,19 +44,17 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>0.2.0</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>2</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>
   <true/>
-  <key>NSAppleEventsUsageDescription</key>
-  <string>ChatPulse использует Apple Events только для проверки выбранных чатов и отправки заданной команды в Google Chrome.</string>
 </dict>
 </plist>
 PLIST
 
 codesign --force --deep --sign - "$APP_DIR"
 
-echo "Built: $APP_DIR"
+echo "Собрано: $APP_DIR"

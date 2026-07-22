@@ -1,79 +1,51 @@
-# Setup and troubleshooting
+# Установка и устранение проблем
 
-## Build prerequisites
-
-Install Xcode Command Line Tools:
+## Сборка
 
 ```bash
 xcode-select --install
-```
-
-Verify Swift:
-
-```bash
-swift --version
-```
-
-## Build
-
-```bash
 bash scripts/build_app.sh
 ```
 
-Output:
+Результат: `dist/ChatPulse.app`.
 
-```text
-dist/ChatPulse.app
-```
-
-## Install
+## Установка
 
 ```bash
 bash scripts/install_app.sh
 ```
 
-## Chrome permission
+## Первый вход
 
-Enable:
+1. Откройте **«Браузер ChatPulse»** из строки меню.
+2. Войдите в ChatGPT.
+3. Откройте конкретный разговор.
+4. Нажмите **«Добавить чат»**.
 
-```text
-View → Developer → Allow JavaScript from Apple Events
-```
+Никакие разрешения Automation для Chrome или Safari не требуются.
 
-Then allow Automation access in macOS when prompted.
+## Вход через Google не открывается
 
-## “Не удалось добавить чат”
+Google официально ограничивает OAuth во встроенных WebView. Используйте другой способ входа в ChatGPT. ChatPulse не подменяет User-Agent и не пытается обходить это ограничение.
 
-Check that:
+## Чат открыт, но команда не отправляется
 
-- the frontmost application is Google Chrome;
-- the active Chrome tab is a specific ChatGPT conversation;
-- its URL contains `/c/`;
-- JavaScript from Apple Events is enabled.
+Возможные причины:
 
-## Chat opens but no command is sent
+- ответ обнаружен впервые и приложение ждёт следующую проверку;
+- ChatGPT ещё генерирует;
+- последнее сообщение принадлежит пользователю;
+- этот ответ уже был продолжен;
+- страница не загрузилась;
+- поле ввода или кнопка отправки недоступны;
+- интерфейс ChatGPT изменился.
 
-Expected reasons:
+Проверьте пункт **«Последние действия…»**.
 
-- the response changed on this check, so ChatPulse waits one full interval;
-- ChatGPT is still generating;
-- the latest message belongs to the user;
-- the same response has already been continued;
-- a technical limit or page error is visible;
-- the prompt control could not be found after a ChatGPT UI update.
-
-Inspect **Последние действия…** from the menu.
-
-## Reset settings
-
-Quit ChatPulse and remove:
+## Сброс настроек
 
 ```bash
 rm -rf "$HOME/Library/Application Support/ChatPulse"
 ```
 
-## Uninstall application
-
-```bash
-bash scripts/uninstall_app.sh
-```
+Удаление данных входа WebKit выполняется через системное управление данными сайтов либо переустановку профиля приложения.

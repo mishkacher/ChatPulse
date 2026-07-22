@@ -11,4 +11,4 @@ rm -rf "$DESTINATION"
 cp -R "$SOURCE_APP" "$DESTINATION"
 open "$DESTINATION"
 
-echo "Installed: $DESTINATION"
+echo "Установлено: $DESTINATION"

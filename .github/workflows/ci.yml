@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "agent/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Версия Swift
+        run: swift --version
+
+      - name: Модульные тесты
+        run: swift test
+
+      - name: 20 проверок качества
+        run: python3 scripts/quality_gate.py
+
+      - name: Сборка приложения macOS
+        run: bash scripts/build_app.sh
+
+      - name: Упаковка приложения
+        run: ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app dist/ChatPulse-macOS.zip
+
+      - name: Публикация неподписанного приложения
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatPulse-macOS
+          path: dist/ChatPulse-macOS.zip
+          if-no-files-found: error

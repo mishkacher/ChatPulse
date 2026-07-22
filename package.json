@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test tests/chrome-extension/*.test.mjs",
     "validate:extension": "node scripts/validate_extension.mjs",
-    "check:syntax": "node --check chrome-extension/lib/model.js && node --check chrome-extension/background/service-worker.js && node --check chrome-extension/content/content-script.js && node --check chrome-extension/popup/popup.js && node --check chrome-extension/options/options.js",
+    "check:syntax": "node --check chrome-extension/lib/model-v2.js && node --check chrome-extension/background/service-worker-v2.js && node --check chrome-extension/content/content-script.js && node --check chrome-extension/popup/popup.js && node --check chrome-extension/options/options.js",
     "audit:extension": "npm run check:syntax && npm test && npm run validate:extension"
   },
   "engines": {

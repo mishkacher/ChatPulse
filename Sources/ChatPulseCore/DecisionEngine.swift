@@ -3,11 +3,11 @@ import Foundation
 public struct DecisionEngine: Sendable {
     public init() {}
 
-    /// Evaluates a single completed browser observation.
+    /// Оценивает одно завершённое наблюдение браузера.
     ///
-    /// The first observation in every application run is always a baseline. This prevents
-    /// ChatPulse from sending a continuation immediately after launch. A continuation is sent
-    /// only when the same completed assistant message is observed again on a later check.
+    /// Первая проверка после каждого запуска всегда только фиксирует исходное состояние.
+    /// Команда отправляется лишь тогда, когда один и тот же завершённый ответ ассистента
+    /// обнаружен повторно на следующей проверке.
     public func evaluate(
         chat original: MonitoredChat,
         snapshot: BrowserSnapshot,
@@ -24,10 +24,6 @@ public struct DecisionEngine: Sendable {
 
         guard snapshot.pageReady else {
             return EvaluationResult(chat: chat, decision: .pageNotReady)
-        }
-
-        if snapshot.limitDetected {
-            return EvaluationResult(chat: chat, decision: .technicalLimit)
         }
 
         if snapshot.errorDetected {

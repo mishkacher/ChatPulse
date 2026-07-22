@@ -1,90 +1,57 @@
-# Architecture
+# Архитектура
 
-## Goals
+## Компоненты
 
-ChatPulse is intentionally small and deterministic. It does not use an LLM to decide what to do and does not require a remote service.
+1. **Интерфейс строки меню** — управление, статус, интервалы и список чатов.
+2. **Видимый браузер** — окно `WKWebView` для входа в ChatGPT и выбора чатов.
+3. **Фоновый браузер** — отдельный скрытый `WKWebView`, который последовательно проверяет сохранённые URL.
+4. **Координатор** — таймер, отмена, последовательная обработка и журнал.
+5. **DecisionEngine** — чистая логика решения без доступа к браузеру.
+6. **JSONSettingsStore** — локальное атомарное сохранение состояния.
 
-The application has four boundaries:
-
-1. **Menu bar UI** — user controls and status presentation.
-2. **Monitor coordinator** — scheduling, cancellation and sequential processing.
-3. **Decision engine** — pure state transition logic.
-4. **Chrome automation** — the only component allowed to inspect or modify a browser tab.
-
-## Data flow
+## Поток данных
 
 ```text
-Timer
+Таймер
   ↓
 MonitorCoordinator
   ↓
-ChromeAutomation.inspect(chat)
+WebKitBrowserController.inspect(chat)
   ↓
 BrowserSnapshot
   ↓
 DecisionEngine.evaluate(...)
   ↓
-MonitorDecision
-  ├── no action
-  ├── record new response
-  ├── block on generation/error/limit
-  └── send continuation
+решение
+  ├── ничего не делать
+  ├── запомнить новый ответ
+  ├── дождаться завершения
+  └── отправить продолжение
           ↓
-    ChromeAutomation.send(...)
+    подтверждение появления сообщения
           ↓
-    confirmation that the user message exists
-          ↓
-    persist commanded fingerprint
+    сохранение обработанного отпечатка
 ```
 
-## Stable-response rule
+## Защита от повторов
 
-A new assistant message is never continued during the same observation in which it is first discovered.
-
-The decision engine requires the same assistant fingerprint on a subsequent check. This creates a complete interval between a newly observed response and the next continuation command.
-
-## Deduplication
-
-Each chat persists:
+Для каждого чата сохраняются:
 
 - `lastObservedFingerprint`;
 - `lastCommandedFingerprint`;
-- timestamps for observation and successful send.
+- время наблюдения;
+- время успешной отправки.
 
-If both fingerprints are equal, ChatPulse has already sent a continuation for that response and will not send it again.
+Отпечаток строится из роли сообщения, DOM-идентификатора и нормализованного текста. Если обработанный отпечаток совпадает с текущим, повторная команда запрещена.
 
-## Browser fingerprint
+## WebKit-профиль
 
-The page script hashes:
+Видимый и скрытый `WKWebView` используют одно постоянное `WKWebsiteDataStore`. Поэтому вход и cookies доступны обоим окнам и сохраняются между запусками приложения. Хранилище не является профилем Safari.
 
-- message role;
-- DOM message identifier when available;
-- normalized visible text of the final message.
+## Детектор лимита
 
-The implementation uses a compact FNV-1a hash inside the browser page. The fingerprint is not cryptographic and is used only for change detection.
+Отдельного детектора технического лимита нет. Недоступность поля или кнопки отправки обрабатывается как обычная неуспешная попытка без фиксации ответа как обработанного.
 
-## Threading
+## Потоки выполнения
 
-- UI work stays on the main thread.
-- browser checks run serially on a utility queue;
-- only one check batch can be active;
-- Stop prevents a pending decision from sending a new command;
-- settings writes are protected by a lock and use atomic file replacement.
-
-## Trust boundaries
-
-The app accepts only normalized chat URLs on:
-
-- `chatgpt.com`;
-- `chat.openai.com`.
-
-No arbitrary URL can be added through the UI.
-
-## Future improvements
-
-- signed and notarized release builds;
-- resilient selector registry with remote-free compatibility packs;
-- launch-at-login option;
-- optional macOS notification when a technical limit is detected;
-- UI tests against a local deterministic HTML fixture;
-- optional Chrome extension transport that avoids Apple Events JavaScript permission.
+WebKit и интерфейс работают на главном акторе. Проверки выполняются последовательно, одновременно может идти только один цикл. Команда «Остановить» отменяет текущую задачу и повторно проверяется непосредственно перед отправкой.

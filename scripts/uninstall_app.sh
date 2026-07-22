@@ -2,4 +2,4 @@
 set -euo pipefail
 
 rm -rf "/Applications/ChatPulse.app"
-echo "Application removed. Settings remain in ~/Library/Application Support/ChatPulse/."
+echo "Приложение удалено. Настройки и данные входа WebKit сохранены в профиле пользователя."

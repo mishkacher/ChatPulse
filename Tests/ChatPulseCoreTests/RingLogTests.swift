@@ -4,10 +4,10 @@ import XCTest
 final class RingLogTests: XCTestCase {
     func testCapacityDropsOldestEntries() {
         let log = RingLog(capacity: 2)
-        log.append(LogEntry(level: .info, message: "one"))
-        log.append(LogEntry(level: .info, message: "two"))
-        log.append(LogEntry(level: .info, message: "three"))
+        log.append(LogEntry(level: .info, message: "один"))
+        log.append(LogEntry(level: .info, message: "два"))
+        log.append(LogEntry(level: .info, message: "три"))
 
-        XCTAssertEqual(log.snapshot().map(\.message), ["two", "three"])
+        XCTAssertEqual(log.snapshot().map(\.message), ["два", "три"])
     }
 }

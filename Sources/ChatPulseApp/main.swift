@@ -4,6 +4,11 @@ import AppKit
 let application = NSApplication.shared
 let delegate = AppDelegate()
 application.delegate = delegate
+
+Task { @MainActor in
+    SkinCoordinator.shared.start()
+}
+
 application.run()
 #else
 import Foundation

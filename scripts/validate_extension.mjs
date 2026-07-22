@@ -12,7 +12,7 @@ assert.equal(manifest.manifest_version, 3, "Требуется Manifest V3");
 assert.equal(manifest.name, "ChatPulse");
 assert.equal(manifest.version, "0.5.0");
 assert.equal(manifest.background?.type, "module");
-assert.equal(manifest.background?.service_worker, "background/service-worker.js");
+assert.equal(manifest.background?.service_worker, "background/service-worker-v2.js");
 assert.equal(manifest.action?.default_popup, "popup/popup.html");
 assert.equal(manifest.options_page, "options/options.html");
 
@@ -36,8 +36,8 @@ assert.ok(!JSON.stringify(manifest).includes("http://*/*"), "Запрещён о
 const requiredFiles = [
   "manifest.json",
   "assets/logo.svg",
-  "lib/model.js",
-  "background/service-worker.js",
+  "lib/model-v2.js",
+  "background/service-worker-v2.js",
   "content/content-script.js",
   "popup/popup.html",
   "popup/popup.css",
@@ -53,8 +53,8 @@ for (const relativePath of requiredFiles) {
   assert.ok(metadata.isFile() && metadata.size > 0, `Файл отсутствует или пуст: ${relativePath}`);
 }
 
-const model = await readFile(path.join(extensionRoot, "lib/model.js"), "utf8");
-const background = await readFile(path.join(extensionRoot, "background/service-worker.js"), "utf8");
+const model = await readFile(path.join(extensionRoot, "lib/model-v2.js"), "utf8");
+const background = await readFile(path.join(extensionRoot, "background/service-worker-v2.js"), "utf8");
 const content = await readFile(path.join(extensionRoot, "content/content-script.js"), "utf8");
 const popupCSS = await readFile(path.join(extensionRoot, "popup/popup.css"), "utf8");
 const optionsCSS = await readFile(path.join(extensionRoot, "options/options.css"), "utf8");
@@ -65,6 +65,7 @@ assert.ok(model.includes("submitted-unconfirmed"));
 assert.ok(model.includes("lastObservedSessionId"));
 assert.ok(background.includes("mergeRuntimeState"));
 assert.ok(background.includes("liveChat?.enabled"));
+assert.ok(background.includes("merged = await configureAlarm(merged)"));
 assert.ok(background.includes("chrome.alarms"));
 assert.ok(background.includes("chrome.tabs.create"));
 assert.ok(content.includes("CHATPULSE_INSPECT"));

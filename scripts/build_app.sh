@@ -21,6 +21,7 @@ ICON_WORK_DIR="$DIST_DIR/.icon-work"
 ICON_PNG="$ICON_WORK_DIR/ChatPulseIcon-1024.png"
 ICONSET_DIR="$ICON_WORK_DIR/ChatPulse.iconset"
 SIGN_IDENTITY="${CHATPULSE_CODESIGN_IDENTITY:--}"
+ARCHITECTURE_LIST="${CHATPULSE_ARCHITECTURES:-arm64 x86_64}"
 
 read_trimmed() {
   tr -d '[:space:]' < "$1"
@@ -41,14 +42,41 @@ BUILD_NUMBER="$(read_trimmed "$BUILD_NUMBER_FILE")"
   exit 1
 }
 
+read -r -a ARCHITECTURES <<< "$ARCHITECTURE_LIST"
+[[ ${#ARCHITECTURES[@]} -gt 0 ]] || {
+  echo "Не указаны архитектуры сборки" >&2
+  exit 1
+}
+
+SWIFT_ARCH_ARGS=()
+for architecture in "${ARCHITECTURES[@]}"; do
+  case "$architecture" in
+    arm64|x86_64)
+      SWIFT_ARCH_ARGS+=(--arch "$architecture")
+      ;;
+    *)
+      echo "Неподдерживаемая архитектура: $architecture" >&2
+      exit 1
+      ;;
+  esac
+done
+
 cd "$ROOT_DIR"
 rm -rf "$APP_DIR" "$ICON_WORK_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$ICONSET_DIR"
 
-swift build -c release
-BIN_DIR="$(swift build -c release --show-bin-path)"
+swift build -c release "${SWIFT_ARCH_ARGS[@]}"
+BIN_DIR="$(swift build -c release "${SWIFT_ARCH_ARGS[@]}" --show-bin-path)"
 cp "$BIN_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
+
+ACTUAL_ARCHITECTURES="$(lipo -archs "$MACOS_DIR/$APP_NAME")"
+for architecture in "${ARCHITECTURES[@]}"; do
+  grep -qw "$architecture" <<< "$ACTUAL_ARCHITECTURES" || {
+    echo "В бинарнике отсутствует архитектура $architecture: $ACTUAL_ARCHITECTURES" >&2
+    exit 1
+  }
+done
 
 if [[ -f "$ICON_SOURCE" ]]; then
   # AppKit сохраняет векторный SVG в исходный PNG 1024×1024,
@@ -166,3 +194,4 @@ rm -rf "$ICON_WORK_DIR"
 
 echo "Собрано: $APP_DIR"
 echo "Версия: $APP_VERSION (build $BUILD_NUMBER)"
+echo "Архитектуры: $ACTUAL_ARCHITECTURES"

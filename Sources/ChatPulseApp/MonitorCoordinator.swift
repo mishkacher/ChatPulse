@@ -116,13 +116,13 @@ final class MonitorCoordinator {
         publish(MonitorStatus(state: .checking, checkedAt: nil, nextCheckAt: nil))
 
         do {
-            var settings = try store.load()
+            var observedSettings = try store.load()
             let now = Date()
             var notableState: MonitorStatus.State = .idle
 
-            for index in settings.chats.indices where settings.chats[index].isEnabled {
+            for index in observedSettings.chats.indices where observedSettings.chats[index].isEnabled {
                 if Task.isCancelled { break }
-                var chat = settings.chats[index]
+                var chat = observedSettings.chats[index]
 
                 do {
                     let snapshot = try await browser.inspect(chat: chat)
@@ -143,7 +143,19 @@ final class MonitorCoordinator {
                             log.append(LogEntry(level: .info, message: "Отправка отменена: наблюдение остановлено"))
                             break
                         }
-                        try await browser.send(command: settings.commandText, to: chat)
+
+                        // Пользователь мог удалить или отключить чат, пока WebKit ожидал загрузку.
+                        // Перед отправкой перечитываем актуальные настройки и не действуем по старому снимку.
+                        let liveSettings = try store.load()
+                        guard liveSettings.chats.contains(where: { $0.id == chat.id && $0.isEnabled }) else {
+                            log.append(LogEntry(
+                                level: .info,
+                                message: "Отправка отменена: чат «\(chat.title)» удалён или отключён"
+                            ))
+                            break
+                        }
+
+                        try await browser.send(command: liveSettings.commandText, to: chat)
                         chat = engine.recordSuccessfulSend(
                             chat: chat,
                             fingerprint: fingerprint,
@@ -161,19 +173,26 @@ final class MonitorCoordinator {
                         ))
                     }
 
-                    settings.chats[index] = chat
+                    observedSettings.chats[index] = chat
                 } catch {
                     notableState = .warning(error.localizedDescription)
                     log.append(LogEntry(level: .error, message: "\(chat.title): \(error.localizedDescription)"))
                 }
             }
 
-            try store.save(settings)
-            onSettingsChanged?(settings)
+            // Не сохраняем старый снимок целиком. Пока выполнялись await-вызовы,
+            // пользователь мог изменить интервал, список чатов или их включённое состояние.
+            let latestSettings = try store.load()
+            let mergedSettings = SettingsMerger.mergeRuntimeState(
+                from: observedSettings,
+                into: latestSettings
+            )
+            try store.save(mergedSettings)
+            onSettingsChanged?(mergedSettings)
             publish(MonitorStatus(
                 state: notableState,
                 checkedAt: now,
-                nextCheckAt: isRunning ? now.addingTimeInterval(settings.checkIntervalSeconds) : nil
+                nextCheckAt: isRunning ? now.addingTimeInterval(mergedSettings.checkIntervalSeconds) : nil
             ))
         } catch {
             log.append(LogEntry(level: .error, message: error.localizedDescription))

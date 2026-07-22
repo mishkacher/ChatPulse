@@ -9,8 +9,11 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     var onAddCurrentChat: (() -> Void)?
 
     private let addressField = NSTextField(labelWithString: "chatgpt.com")
+    private let loginStatusField = NSTextField(labelWithString: "Вход: выберите email / код или passkey")
     private var popupWindows: [ObjectIdentifier: NSWindow] = [:]
     private var isShowingGoogleSignInAlert = false
+    private var pendingLoginMethod: ChatPulseLoginMethod?
+    private var preparedLoginPages = Set<String>()
 
     private lazy var backButton: NSButton = {
         let button = NSButton(
@@ -56,6 +59,13 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         return button
     }()
 
+    private lazy var loginButton: NSButton = {
+        let button = NSButton(title: "Войти ▾", target: self, action: #selector(showLoginMenu))
+        button.bezelStyle = .rounded
+        button.toolTip = "Выбрать способ входа в ChatGPT"
+        return button
+    }()
+
     private lazy var addButton: NSButton = {
         let button = NSButton(title: "Добавить чат", target: self, action: #selector(addCurrentChat))
         button.bezelStyle = .rounded
@@ -76,7 +86,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             defer: false
         )
         window.title = "Браузер ChatPulse"
-        window.minSize = NSSize(width: 720, height: 520)
+        window.minSize = NSSize(width: 760, height: 540)
         window.maxSize = Self.maximumWindowSize(on: NSScreen.main)
         window.isReleasedWhenClosed = false
 
@@ -132,16 +142,25 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         addressField.textColor = .secondaryLabelColor
         addressField.alignment = .center
 
+        loginStatusField.translatesAutoresizingMaskIntoConstraints = false
+        loginStatusField.lineBreakMode = .byTruncatingTail
+        loginStatusField.maximumNumberOfLines = 1
+        loginStatusField.textColor = .secondaryLabelColor
+        loginStatusField.font = NSFont.systemFont(ofSize: 11)
+
         let controls = NSStackView(views: [backButton, forwardButton, reloadButton, homeButton])
         controls.orientation = .horizontal
         controls.spacing = 6
         controls.translatesAutoresizingMaskIntoConstraints = false
 
+        loginButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.translatesAutoresizingMaskIntoConstraints = false
 
         toolbar.addSubview(controls)
         toolbar.addSubview(addressField)
+        toolbar.addSubview(loginButton)
         toolbar.addSubview(addButton)
+        toolbar.addSubview(loginStatusField)
         contentView.addSubview(toolbar)
         contentView.addSubview(webView)
 
@@ -149,17 +168,24 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             toolbar.topAnchor.constraint(equalTo: contentView.topAnchor),
             toolbar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            toolbar.heightAnchor.constraint(equalToConstant: 46),
+            toolbar.heightAnchor.constraint(equalToConstant: 72),
 
             controls.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 10),
-            controls.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            controls.topAnchor.constraint(equalTo: toolbar.topAnchor, constant: 10),
 
             addButton.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -10),
-            addButton.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            addButton.centerYAnchor.constraint(equalTo: controls.centerYAnchor),
+
+            loginButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -8),
+            loginButton.centerYAnchor.constraint(equalTo: controls.centerYAnchor),
 
             addressField.leadingAnchor.constraint(equalTo: controls.trailingAnchor, constant: 12),
-            addressField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -12),
-            addressField.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            addressField.trailingAnchor.constraint(equalTo: loginButton.leadingAnchor, constant: -12),
+            addressField.centerYAnchor.constraint(equalTo: controls.centerYAnchor),
+
+            loginStatusField.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 12),
+            loginStatusField.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -12),
+            loginStatusField.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: -8),
 
             webView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -188,11 +214,224 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     }
 
     @objc private func openHome() {
+        pendingLoginMethod = nil
+        preparedLoginPages.removeAll()
+        setLoginStatus("Открыта главная страница ChatGPT")
         load(URL(string: "https://chatgpt.com/")!)
     }
 
     @objc private func addCurrentChat() {
         onAddCurrentChat?()
+    }
+
+    @objc private func showLoginMenu() {
+        let menu = NSMenu()
+
+        let emailItem = NSMenuItem(
+            title: "Войти по email / коду",
+            action: #selector(beginEmailCodeLogin),
+            keyEquivalent: ""
+        )
+        emailItem.target = self
+        menu.addItem(emailItem)
+
+        let passkeyItem = NSMenuItem(
+            title: "Войти с passkey",
+            action: #selector(beginPasskeyLogin),
+            keyEquivalent: ""
+        )
+        passkeyItem.target = self
+        menu.addItem(passkeyItem)
+
+        menu.addItem(.separator())
+
+        let codeItem = NSMenuItem(
+            title: "Запросить код по email на этой странице",
+            action: #selector(requestEmailCodeOnCurrentPage),
+            keyEquivalent: ""
+        )
+        codeItem.target = self
+        menu.addItem(codeItem)
+
+        let helpItem = NSMenuItem(
+            title: "Как работают эти способы…",
+            action: #selector(showLoginHelp),
+            keyEquivalent: ""
+        )
+        helpItem.target = self
+        menu.addItem(helpItem)
+
+        menu.popUp(
+            positioning: nil,
+            at: NSPoint(x: 0, y: loginButton.bounds.height + 4),
+            in: loginButton
+        )
+    }
+
+    @objc private func beginEmailCodeLogin() {
+        startLogin(.emailCode)
+    }
+
+    @objc private func beginPasskeyLogin() {
+        startLogin(.passkey)
+    }
+
+    @objc private func requestEmailCodeOnCurrentPage() {
+        setLoginStatus("Ищу кнопку запроса кода по email…")
+        evaluateLoginScript(LoginSupport.requestEmailCodeJavaScript, in: webView) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case "email-code-requested":
+                self.setLoginStatus("Запрос кода отправлен. Используйте самое новое письмо OpenAI")
+            case "script-error":
+                self.setLoginStatus("Не удалось выполнить действие на странице")
+            default:
+                self.setLoginStatus("Кнопка запроса кода не найдена на текущем шаге")
+                self.showEmailCodeNotFoundAlert()
+            }
+        }
+    }
+
+    @objc private func showLoginHelp() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Вход по email-коду и passkey"
+        alert.informativeText = "Email / код: ChatPulse открывает официальный экран OpenAI и фокусирует поле email. Сам код приходит от OpenAI и вводится только на странице входа.\n\nPasskey: WebKit передаёт запрос системному окну macOS, где используется Touch ID, пароль Mac, iCloud Keychain или совместимый ключ безопасности. Passkey должен быть заранее добавлен в аккаунт OpenAI.\n\nЕсли аккаунт был создан только через Google, OpenAI может не разрешить перейти на email-вход. Тогда сначала добавьте passkey в настройках безопасности ChatGPT, войдя в обычном Safari или приложении ChatGPT."
+        alert.addButton(withTitle: "Понятно")
+        alert.runModal()
+    }
+
+    private func startLogin(_ method: ChatPulseLoginMethod) {
+        pendingLoginMethod = method
+        preparedLoginPages.removeAll()
+
+        switch method {
+        case .emailCode:
+            setLoginStatus("Открываю официальный вход OpenAI по email / коду…")
+        case .passkey:
+            setLoginStatus("Открываю вход OpenAI и проверяю доступность passkey…")
+        }
+
+        load(LoginSupport.loginURL)
+        showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func preparePendingLogin(in targetWebView: WKWebView) {
+        guard let method = pendingLoginMethod,
+              let url = targetWebView.url,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            return
+        }
+
+        let pageKey = "\(method.rawValue)|\(url.absoluteString)"
+        guard preparedLoginPages.insert(pageKey).inserted else { return }
+
+        switch method {
+        case .emailCode:
+            evaluateLoginScript(LoginSupport.emailCodePreparationJavaScript, in: targetWebView) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case "email-focused":
+                    self.setLoginStatus("Введите email. Если OpenAI запросит проверку, введите код из письма")
+                case "email-choice-clicked":
+                    self.setLoginStatus("Выбран вход по email. Дождитесь появления поля адреса")
+                    self.scheduleLoginPreparationRetry(in: targetWebView)
+                case "script-error":
+                    self.setLoginStatus("Не удалось подготовить страницу входа по email")
+                default:
+                    self.setLoginStatus("Продолжите вход вручную: выберите email и используйте код из письма")
+                }
+            }
+        case .passkey:
+            evaluateLoginScript(LoginSupport.passkeyPreparationJavaScript, in: targetWebView) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case "passkey-triggered":
+                    self.setLoginStatus("Подтвердите passkey в системном окне macOS")
+                case "passkey-available-no-button":
+                    self.setLoginStatus("Passkey доступен. Введите email, затем выберите вход с ключом доступа")
+                case "passkey-unavailable":
+                    self.setLoginStatus("На этом Mac не найден доступный passkey для текущего шага")
+                    self.showPasskeyUnavailableAlert()
+                case "passkey-unsupported":
+                    self.setLoginStatus("Текущая страница не предложила WebAuthn / passkey")
+                    self.showPasskeyUnavailableAlert()
+                case "script-error":
+                    self.setLoginStatus("Не удалось проверить passkey на странице")
+                default:
+                    self.setLoginStatus("Введите email; OpenAI покажет passkey, если он привязан к аккаунту")
+                }
+            }
+        }
+    }
+
+    private func scheduleLoginPreparationRetry(in targetWebView: WKWebView) {
+        Task { @MainActor [weak self, weak targetWebView] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard let self, let targetWebView else { return }
+            self.preparedLoginPages.removeAll()
+            self.preparePendingLogin(in: targetWebView)
+        }
+    }
+
+    private func detectCompletedLogin(in targetWebView: WKWebView) {
+        guard targetWebView === webView,
+              LoginSupport.isLikelySuccessfulLoginURL(targetWebView.url) else {
+            return
+        }
+
+        evaluateLoginScript(LoginSupport.authenticatedStateJavaScript, in: targetWebView) { [weak self] result in
+            guard let self, result == "authenticated" else { return }
+            self.pendingLoginMethod = nil
+            self.preparedLoginPages.removeAll()
+            self.setLoginStatus("Вход выполнен. Откройте чат и нажмите «Добавить чат»")
+        }
+    }
+
+    private func evaluateLoginScript(
+        _ script: String,
+        in targetWebView: WKWebView,
+        completion: @escaping @MainActor (String) -> Void
+    ) {
+        targetWebView.evaluateJavaScript(script) { result, error in
+            let value = result as? String
+            let hasError = error != nil
+            Task { @MainActor in
+                completion(hasError ? "script-error" : (value ?? "unknown"))
+            }
+        }
+    }
+
+    private func setLoginStatus(_ message: String) {
+        loginStatusField.stringValue = "Вход: \(message)"
+        loginStatusField.toolTip = message
+    }
+
+    private func showEmailCodeNotFoundAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Запрос кода сейчас недоступен"
+        alert.informativeText = "Сначала выберите «Войти по email / коду» и введите email. Кнопка «Попробовать с email» появляется только на тех шагах, где OpenAI предлагает альтернативную проверку."
+        alert.addButton(withTitle: "Открыть вход по email")
+        alert.addButton(withTitle: "Отмена")
+        if alert.runModal() == .alertFirstButtonReturn {
+            beginEmailCodeLogin()
+        }
+    }
+
+    private func showPasskeyUnavailableAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Passkey пока не найден"
+        alert.informativeText = "Passkey должен быть заранее добавлен в аккаунт OpenAI и доступен в iCloud Keychain, менеджере паролей или на совместимом ключе безопасности. Иногда OpenAI показывает вариант passkey только после ввода email."
+        alert.addButton(withTitle: "Открыть вход и ввести email")
+        alert.addButton(withTitle: "Отмена")
+        if alert.runModal() == .alertFirstButtonReturn {
+            pendingLoginMethod = .passkey
+            preparedLoginPages.removeAll()
+            load(LoginSupport.loginURL)
+        }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -208,6 +447,9 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
             let title = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             popupWindow.title = title.isEmpty ? "Вход — ChatPulse" : title
         }
+
+        detectCompletedLogin(in: webView)
+        preparePendingLogin(in: webView)
     }
 
     func webView(
@@ -217,6 +459,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     ) {
         if webView === self.webView {
             updateNavigationState()
+            setLoginStatus("Ошибка загрузки: \(error.localizedDescription)")
         }
     }
 
@@ -227,6 +470,7 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
     ) {
         if webView === self.webView {
             updateNavigationState()
+            setLoginStatus("Ошибка загрузки: \(error.localizedDescription)")
         }
     }
 
@@ -331,9 +575,19 @@ final class BrowserWindowController: NSWindowController, WKNavigationDelegate, W
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "Вход через Google недоступен во встроенном браузере"
-        alert.informativeText = "Google запрещает OAuth-авторизацию во встроенных WebView. ChatPulse остановил переход, поэтому огромное белое окно больше не откроется. Вернитесь на страницу входа ChatGPT и выберите другой доступный способ авторизации. Сессия Safari не может быть перенесена во встроенный браузер ChatPulse."
-        alert.addButton(withTitle: "Понятно")
-        alert.runModal()
+        alert.informativeText = "Google запрещает OAuth-авторизацию во встроенных WebView. Выберите вход по email / коду или passkey. Если аккаунт был создан только через Google, сначала добавьте passkey в настройках безопасности OpenAI через обычный Safari или приложение ChatGPT."
+        alert.addButton(withTitle: "Email / код")
+        alert.addButton(withTitle: "Passkey")
+        alert.addButton(withTitle: "Отмена")
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            beginEmailCodeLogin()
+        case .alertSecondButtonReturn:
+            beginPasskeyLogin()
+        default:
+            break
+        }
     }
 
     private func constrainToVisibleScreen(_ window: NSWindow?) {

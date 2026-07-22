@@ -18,12 +18,18 @@ const ui = {
   chatTable: document.querySelector("#chatTable"),
   logList: document.querySelector("#logList"),
   chatRowTemplate: document.querySelector("#chatRowTemplate"),
-  logTemplate: document.querySelector("#logTemplate")
+  logTemplate: document.querySelector("#logTemplate"),
+  versionLabel: document.querySelector("#versionLabel")
 };
 
 let state = null;
 let busy = false;
 let messageTimer = null;
+let commandDirty = false;
+let intervalDirty = false;
+
+const manifest = chrome.runtime.getManifest();
+ui.versionLabel.textContent = `ChatPulse ${manifest.version_name || manifest.version}`;
 
 void refresh();
 
@@ -41,6 +47,12 @@ ui.checkButton.addEventListener("click", () => action("CHECK_NOW"));
 ui.addCurrentButton.addEventListener("click", () => action("ADD_CURRENT_CHAT"));
 ui.addCurrentTopButton.addEventListener("click", () => action("ADD_CURRENT_CHAT"));
 ui.clearLogsButton.addEventListener("click", () => action("CLEAR_LOGS"));
+ui.commandField.addEventListener("input", () => {
+  commandDirty = ui.commandField.value !== (state?.commandText || "");
+});
+ui.intervalSelect.addEventListener("change", () => {
+  intervalDirty = Number(ui.intervalSelect.value) !== Number(state?.intervalMinutes);
+});
 ui.saveButton.addEventListener("click", () => action("UPDATE_SETTINGS", {
   patch: {
     commandText: ui.commandField.value,
@@ -69,6 +81,10 @@ async function action(type, payload = {}, showSuccess = true) {
   try {
     const response = await request(type, payload);
     if (response.state) state = response.state;
+    if (type === "UPDATE_SETTINGS" && Object.hasOwn(payload?.patch || {}, "commandText")) {
+      commandDirty = false;
+      intervalDirty = false;
+    }
     render(type === "GET_STATE");
     if (showSuccess) showMessage(successMessage(type), "info");
   } catch (error) {
@@ -104,11 +120,13 @@ function render(initial = false) {
   ui.lastCheckMetric.textContent = state.lastCheckAt ? formatDateTime(state.lastCheckAt) : "—";
   ui.nextCheckMetric.textContent = `Следующая: ${state.nextCheckAt ? formatDateTime(state.nextCheckAt) : "—"}`;
 
-  if (initial || document.activeElement !== ui.commandField) {
+  if (initial || !commandDirty) {
     ui.commandField.value = state.commandText;
   }
   ensureIntervalOption(state.intervalMinutes);
-  ui.intervalSelect.value = String(state.intervalMinutes);
+  if (initial || !intervalDirty) {
+    ui.intervalSelect.value = String(state.intervalMinutes);
+  }
 
   renderChats();
   renderLogs();
@@ -159,6 +177,9 @@ function renderLogs() {
 function runtimeText(chat) {
   if (!chat.enabled) return "Наблюдение отключено";
   if (chat.lastError) return `Ошибка: ${chat.lastError}`;
+  if (chat.lastRecoveryAt && (!chat.lastCommandAt || chat.lastRecoveryAt > chat.lastCommandAt)) {
+    return `Вкладка восстановлена ${formatDateTime(chat.lastRecoveryAt)}`;
+  }
   if (chat.lastCommandAt) {
     const outcome = chat.lastDispatchOutcome === "confirmed" ? "подтверждено" : "клик выполнен";
     return `Отправлено ${formatDateTime(chat.lastCommandAt)} · ${outcome}`;
@@ -181,7 +202,7 @@ function successMessage(type) {
     START_MONITORING: "Наблюдение запущено. Первая проверка новой сессии будет пассивной.",
     STOP_MONITORING: "Наблюдение остановлено.",
     CHECK_NOW: "Ручная проверка завершена.",
-    ADD_CURRENT_CHAT: "Активный чат добавлен или обновлён.",
+    ADD_CURRENT_CHAT: "Последний использованный чат ChatGPT добавлен или обновлён.",
     REMOVE_CHAT: "Чат удалён.",
     TOGGLE_CHAT: "Состояние чата изменено.",
     UPDATE_SETTINGS: "Настройки сохранены.",

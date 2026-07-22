@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 beta — release hardening
+
+- derive popup and options version labels from the extension Manifest;
+- add a chat from the full options interface by selecting the last used concrete ChatGPT tab;
+- reuse and activate an existing tracked tab instead of creating duplicate tabs;
+- preserve unsaved command text and interval while switching interface themes;
+- surface the latest tab recovery in popup and options runtime status;
+- add a full mocked Chrome Tabs/service-worker integration test covering recovery, at-most-once dispatch, adding from options and duplicate-free opening;
+- expand static validation and five-cycle CI packaging for version 0.5.2.
+
 ## 0.5.1 beta — stale-tab recovery
 
 - detect Chrome `discarded` and `frozen` managed tabs before reading the page;

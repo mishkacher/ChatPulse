@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "agent/**", "feature/**", "fix/**"]
+    branches: [main, "agent/**", "feature/**", "fix/**", "release/**"]
   pull_request:
 
 permissions:
@@ -12,7 +12,7 @@ jobs:
   test-and-build:
     name: Полный цикл ${{ matrix.round }}/5
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -25,25 +25,45 @@ jobs:
       - name: Версия Swift
         run: swift --version
 
-      - name: Модульные тесты — цикл ${{ matrix.round }}
+      - name: Метаданные версии
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_VERSION="$(tr -d '[:space:]' < VERSION)"
+          BUILD_NUMBER="$(tr -d '[:space:]' < BUILD_NUMBER)"
+          [[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Модульные тесты debug — цикл ${{ matrix.round }}
         shell: bash
         run: |
           set -o pipefail
-          if ! swift test > swift-test.log 2>&1; then
-            echo "Последние строки компилятора Swift:"
-            tail -n 160 swift-test.log
-            exit 1
-          fi
-          tail -n 30 swift-test.log
+          swift test 2>&1 | tee swift-test-debug.log
 
-      - name: Диагностический лог Swift — цикл ${{ matrix.round }}
+      - name: Модульные тесты release — цикл ${{ matrix.round }}
+        shell: bash
+        run: |
+          set -o pipefail
+          swift test -c release 2>&1 | tee swift-test-release.log
+
+      - name: Диагностические логи Swift — цикл ${{ matrix.round }}
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ChatPulse-swift-log-${{ matrix.round }}
-          path: swift-test.log
-          if-no-files-found: error
+          name: ChatPulse-swift-logs-${{ matrix.round }}
+          path: swift-test-*.log
+          if-no-files-found: warn
           retention-days: 7
+
+      - name: Синтаксис shell-скриптов — цикл ${{ matrix.round }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
 
       - name: 20 проверок качества — цикл ${{ matrix.round }}
         run: python3 scripts/quality_gate.py
@@ -52,20 +72,38 @@ jobs:
         run: bash scripts/build_app.sh
 
       - name: Проверка bundle — цикл ${{ matrix.round }}
+        shell: bash
         run: |
-          test -x dist/ChatPulse.app/Contents/MacOS/ChatPulse
-          plutil -lint dist/ChatPulse.app/Contents/Info.plist
-          codesign --verify --deep --strict dist/ChatPulse.app
-          test "$(defaults read "$PWD/dist/ChatPulse.app/Contents/Info" CFBundleShortVersionString)" = "0.4.0"
+          set -euo pipefail
+          APP="dist/ChatPulse.app"
+          PLIST="$APP/Contents/Info.plist"
+          test -x "$APP/Contents/MacOS/ChatPulse"
+          test -f "$APP/Contents/Resources/ChatPulse.icns"
+          plutil -lint "$PLIST"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$APP_VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = "$BUILD_NUMBER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "com.mishkacher.ChatPulse"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$PLIST")" = "true"
+          codesign --verify --deep --strict "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -q 'Identifier=com.mishkacher.ChatPulse'
+          codesign -dvv "$APP" 2>&1 | grep -q 'runtime'
 
       - name: Упаковка приложения
         if: matrix.round == 5
-        run: ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app dist/ChatPulse-macOS.zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="dist/ChatPulse-macOS-v${APP_VERSION}.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app "$ARCHIVE"
+          (cd dist && shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
 
-      - name: Публикация неподписанного приложения
+      - name: Публикация проверенного приложения
         if: matrix.round == 5
         uses: actions/upload-artifact@v4
         with:
-          name: ChatPulse-macOS
-          path: dist/ChatPulse-macOS.zip
+          name: ChatPulse-macOS-v${{ env.APP_VERSION }}
+          path: |
+            dist/ChatPulse-macOS-v${{ env.APP_VERSION }}.zip
+            dist/ChatPulse-macOS-v${{ env.APP_VERSION }}.zip.sha256
           if-no-files-found: error
+          retention-days: 90

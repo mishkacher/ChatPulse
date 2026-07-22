@@ -3,8 +3,7 @@ name: Chrome Extension CI
 on:
   push:
     branches:
-      - "feature/chrome-extension"
-      - "feature/chrome-extension/**"
+      - main
     paths:
       - "chrome-extension/**"
       - "tests/chrome-extension/**"

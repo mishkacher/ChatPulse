@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "agent/**", "feature/**"]
+    branches: [main, "agent/**", "feature/**", "fix/**"]
   pull_request:
 
 permissions:
@@ -26,7 +26,15 @@ jobs:
         run: swift --version
 
       - name: Модульные тесты — цикл ${{ matrix.round }}
-        run: swift test
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! swift test > swift-test.log 2>&1; then
+            echo "Последние строки компилятора Swift:"
+            tail -n 160 swift-test.log
+            exit 1
+          fi
+          tail -n 30 swift-test.log
 
       - name: 20 проверок качества — цикл ${{ matrix.round }}
         run: python3 scripts/quality_gate.py

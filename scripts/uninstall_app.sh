@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-rm -rf "/Applications/ChatPulse.app"
-echo "Приложение удалено. Настройки и данные входа WebKit сохранены в профиле пользователя."
+pkill -x ChatPulse 2>/dev/null || true
+rm -rf "/Applications/ChatPulse.app" "$HOME/Applications/ChatPulse.app"
+
+echo "Приложение удалено."
+echo "Настройки сохранены в ~/Library/Application Support/ChatPulse/."

@@ -99,7 +99,7 @@ export function normalizeState(raw) {
   return {
     schemaVersion: 1,
     enabled: raw?.enabled === true,
-    checkInProgress: false,
+    checkInProgress: raw?.checkInProgress === true,
     intervalMinutes: clampInterval(raw?.intervalMinutes ?? fallback.intervalMinutes),
     commandText: typeof raw?.commandText === "string" && raw.commandText.trim()
       ? raw.commandText.trim()
@@ -190,8 +190,7 @@ export function mergeRuntimeState(observedState, latestState) {
     ...latestState,
     checkInProgress: false,
     lastCheckAt: observedState.lastCheckAt,
-    nextCheckAt: observedState.nextCheckAt,
-    logs: observedState.logs,
+    logs: mergeLogs(latestState.logs, observedState.logs),
     chats: latestState.chats.map((latestChat) => {
       const observed = observedById.get(latestChat.id);
       if (!observed) return latestChat;
@@ -208,6 +207,20 @@ export function mergeRuntimeState(observedState, latestState) {
       };
     })
   };
+}
+
+function mergeLogs(latestLogs, observedLogs) {
+  const byId = new Map();
+  for (const log of [...latestLogs, ...observedLogs]) {
+    if (!isValidLog(log)) continue;
+    const key = typeof log.id === "string" && log.id
+      ? log.id
+      : `${log.at || ""}|${log.level || ""}|${log.message}`;
+    byId.set(key, log);
+  }
+  return [...byId.values()]
+    .sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")))
+    .slice(-MAX_LOG_ENTRIES);
 }
 
 function stringOrNull(value) {

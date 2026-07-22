@@ -378,17 +378,18 @@ async function obtainFreshSnapshot({
   if (!Number.isInteger(tab?.id)) throw new Error("У вкладки ChatGPT отсутствует идентификатор.");
   await protectManagedTab(tab.id);
 
-  if (tab.discarded === true || tab.frozen === true) {
-    const reason = tab.discarded === true ? "discarded-tab" : "frozen-tab";
-    return recoverAndInspect(tab.id, reason);
+  let currentTab = await chrome.tabs.get(tab.id);
+  if (currentTab.discarded === true || currentTab.frozen === true) {
+    const reason = currentTab.discarded === true ? "discarded-tab" : "frozen-tab";
+    return recoverAndInspect(currentTab.id, reason);
   }
 
-  await waitForTabComplete(tab.id, TAB_LOAD_TIMEOUT_MS);
+  await waitForTabComplete(currentTab.id, TAB_LOAD_TIMEOUT_MS);
 
   let snapshot = null;
   try {
     const response = await sendToContent(
-      tab.id,
+      currentTab.id,
       { type: "CHATPULSE_INSPECT" },
       { attempts: 2, timeoutMs: CONTENT_MESSAGE_TIMEOUT_MS }
     );
@@ -397,16 +398,23 @@ async function obtainFreshSnapshot({
     snapshot = null;
   }
 
+  // Состояние вкладки могло измениться за время ожидания загрузки или ответа DOM.
+  currentTab = await chrome.tabs.get(currentTab.id);
   const plan = planTabRecovery({
-    tab,
+    tab: currentTab,
     snapshot,
     chat: allowPeriodicRefresh ? chat : { ...chat, lastHardRefreshAt: new Date().toISOString() },
     intervalMinutes
   });
 
-  if (plan.refresh) return recoverAndInspect(tab.id, plan.reason);
-  if (!snapshot) throw new Error("Не удалось получить актуальное состояние страницы ChatGPT.");
-  return { tab: await chrome.tabs.get(tab.id), snapshot, recoveryReason: null };
+  if (plan.refresh) return recoverAndInspect(currentTab.id, plan.reason);
+  if (!snapshot) {
+    if (currentTab.active === true) {
+      throw new Error("Активная вкладка не ответила; автоматическое обновление отменено для защиты действий пользователя.");
+    }
+    throw new Error("Не удалось получить актуальное состояние страницы ChatGPT.");
+  }
+  return { tab: currentTab, snapshot, recoveryReason: null };
 }
 
 async function recoverAndInspect(tabId, reason) {

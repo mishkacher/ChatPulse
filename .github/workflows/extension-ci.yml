@@ -69,23 +69,23 @@ jobs:
           mkdir -p dist
           (
             cd chrome-extension
-            zip -r ../dist/ChatPulse-Chrome-v0.5.0-beta.zip . \
+            zip -r ../dist/ChatPulse-Chrome-v0.5.1-beta.zip . \
               -x "*.DS_Store" "*/.DS_Store"
           )
           (
             cd dist
-            sha256sum ChatPulse-Chrome-v0.5.0-beta.zip \
-              > ChatPulse-Chrome-v0.5.0-beta.zip.sha256
-            sha256sum -c ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+            sha256sum ChatPulse-Chrome-v0.5.1-beta.zip \
+              > ChatPulse-Chrome-v0.5.1-beta.zip.sha256
+            sha256sum -c ChatPulse-Chrome-v0.5.1-beta.zip.sha256
           )
 
       - name: Публикация beta-артефакта
         if: matrix.round == 5
         uses: actions/upload-artifact@v4
         with:
-          name: ChatPulse-Chrome-v0.5.0-beta
+          name: ChatPulse-Chrome-v0.5.1-beta
           path: |
-            dist/ChatPulse-Chrome-v0.5.0-beta.zip
-            dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+            dist/ChatPulse-Chrome-v0.5.1-beta.zip
+            dist/ChatPulse-Chrome-v0.5.1-beta.zip.sha256
           if-no-files-found: error
           retention-days: 30

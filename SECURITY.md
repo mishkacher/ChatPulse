@@ -1,30 +1,27 @@
-# Security policy
+# Политика безопасности
 
-## Supported version
+## Поддерживаемая версия
 
-The current development line is `0.1.x`.
+Текущая линия разработки: `0.2.x`.
 
-## Security model
+## Модель безопасности
 
-ChatPulse is not sandboxed in version 0.1.0 because it must send Apple Events to Google Chrome. macOS therefore grants it Automation access after user confirmation.
+ChatPulse использует системный компонент `WKWebView` и постоянное хранилище WebKit.
 
-The application:
+Приложение:
 
-- accepts only ChatGPT conversation URLs;
-- does not read Chrome cookies directly;
-- does not store passwords or authentication tokens;
-- does not send telemetry;
-- does not call an external AI or API;
-- stores settings locally in the user Application Support directory;
-- sends only the configured continuation command;
-- confirms the new user message before marking a response as processed.
+- принимает только URL разговоров на `chatgpt.com` и `chat.openai.com`;
+- не читает cookies Safari или других браузеров;
+- не хранит пароли в собственном файле настроек;
+- не отправляет телеметрию;
+- не вызывает внешний ИИ или платный API;
+- сохраняет настройки локально;
+- отправляет только настроенную команду;
+- подтверждает появление сообщения перед фиксацией успешной отправки;
+- не пытается обходить технические лимиты.
 
-## Important Chrome setting
+Код страницы выполняется только внутри собственных WebKit-представлений ChatPulse.
 
-`Allow JavaScript from Apple Events` gives approved Apple Events clients the ability to execute page JavaScript in Chrome. Enable it only on a trusted Mac and revoke ChatPulse Automation permission if the application binary is replaced by an untrusted build.
+## Сообщение об уязвимости
 
-A dedicated Chrome profile is recommended for additional isolation.
-
-## Reporting a vulnerability
-
-Open a private security advisory in the GitHub repository. Do not publish secrets, private chat URLs or conversation content in a public issue.
+Используйте приватный Security Advisory репозитория. Не публикуйте приватные URL чатов, cookies и содержимое переписки в открытых issue.

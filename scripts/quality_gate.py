@@ -94,7 +94,7 @@ def main() -> int:
             and "isUserVerifyingPlatformAuthenticatorAvailable" in login_support,
         ),
         (
-            "19 два скина и два синхронизированных переключателя",
+            "19 два скина, два переключателя и сведения о версии",
             "case macOS" in app_skin
             and "case chatPulsePreview" in app_skin
             and "UserDefaults.standard.set" in skin_coordinator
@@ -102,6 +102,8 @@ def main() -> int:
             and "NSPopUpButton" in skin_coordinator
             and "NSMenu.didAddItemNotification" in skin_status_menu
             and "SkinCoordinator.shared.select" in skin_status_menu
+            and "showAbout" in skin_status_menu
+            and "CFBundleShortVersionString" in skin_status_menu
             and all(
                 color in skin_coordinator
                 for color in ["#071126", "#11183A", "#24123D", "#2C8CFF", "#9B5CFF"]
@@ -116,7 +118,7 @@ def main() -> int:
             and "--options runtime" in build_script
             and "swift test -c release" in workflow
             and "round: [1, 2, 3, 4, 5]" in workflow
-            and "release_preflight.sh" in preflight
+            and "Релизный preflight успешно завершён" in preflight
             and "workflow_run:" in release_workflow
             and "gh release create" in release_workflow
             and "shasum -a 256" in release_workflow

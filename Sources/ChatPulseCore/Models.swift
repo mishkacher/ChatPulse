@@ -35,6 +35,15 @@ public struct BrowserSnapshot: Codable, Equatable, Sendable {
     }
 }
 
+/// Результат попытки отправки после фактического нажатия кнопки.
+///
+/// Оба варианта означают, что повторять команду для того же ответа нельзя:
+/// интерфейс мог принять сообщение, даже если DOM-подтверждение не успело появиться.
+public enum CommandSendOutcome: String, Codable, Equatable, Sendable {
+    case confirmed
+    case submittedUnconfirmed
+}
+
 public struct MonitoredChat: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     public var title: String
@@ -44,6 +53,7 @@ public struct MonitoredChat: Codable, Equatable, Identifiable, Sendable {
     public var lastCommandedFingerprint: String?
     public var lastObservedAt: Date?
     public var lastCommandAt: Date?
+    public var lastCommandOutcome: CommandSendOutcome?
 
     public init(
         id: UUID = UUID(),
@@ -53,7 +63,8 @@ public struct MonitoredChat: Codable, Equatable, Identifiable, Sendable {
         lastObservedFingerprint: String? = nil,
         lastCommandedFingerprint: String? = nil,
         lastObservedAt: Date? = nil,
-        lastCommandAt: Date? = nil
+        lastCommandAt: Date? = nil,
+        lastCommandOutcome: CommandSendOutcome? = nil
     ) {
         self.id = id
         self.title = title
@@ -63,6 +74,7 @@ public struct MonitoredChat: Codable, Equatable, Identifiable, Sendable {
         self.lastCommandedFingerprint = lastCommandedFingerprint
         self.lastObservedAt = lastObservedAt
         self.lastCommandAt = lastCommandAt
+        self.lastCommandOutcome = lastCommandOutcome
     }
 }
 

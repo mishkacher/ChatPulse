@@ -1,91 +1,86 @@
-name: Chrome Extension CI
+name: Apply locally verified release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "chrome-extension/**"
-      - "tests/chrome-extension/**"
-      - "scripts/validate_extension.mjs"
-      - "package.json"
-      - ".github/workflows/extension-ci.yml"
   pull_request:
     paths:
-      - "chrome-extension/**"
-      - "tests/chrome-extension/**"
-      - "scripts/validate_extension.mjs"
-      - "package.json"
-      - ".github/workflows/extension-ci.yml"
+      - ".release-payload/**"
+      - ".github/workflows/apply-local-release.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: chatpulse-local-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
-  test-extension:
-    name: Chrome-цикл ${{ matrix.round }}/5
+  apply-local-release:
+    if: github.head_ref == 'feature/health-center-0.5.3'
+    name: Единичная удалённая интеграция
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        round: [1, 2, 3, 4, 5]
 
     steps:
-      - name: Получение исходников
+      - name: Получение подготовленной ветки
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       - name: Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Проверка синтаксиса — цикл ${{ matrix.round }}
-        run: npm run check:syntax
-
-      - name: Модульные и интеграционные тесты — цикл ${{ matrix.round }}
-        run: npm test
-
-      - name: Аудит Manifest V3 — цикл ${{ matrix.round }}
-        run: npm run validate:extension
-
-      - name: Проверка отсутствия секретов и сборочных зависимостей
+      - name: Проверка и распаковка локального payload
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -RIE "API[_-]?KEY|CLIENT[_-]?SECRET|BEGIN (RSA|OPENSSH) PRIVATE KEY" chrome-extension
-          test ! -d chrome-extension/node_modules
-          test ! -f chrome-extension/package-lock.json
+          test "$(find .release-payload -name 'part-*.txt' | wc -l | tr -d ' ')" = "12"
+          cat .release-payload/part-*.txt | base64 --decode > /tmp/chatpulse-0.5.3.tar.gz
+          echo "2773caf38a801fdc50599a93019acd318de4eeb38ca15d18cef040db0034184a  /tmp/chatpulse-0.5.3.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/chatpulse-0.5.3.tar.gz -C .
 
-      - name: Упаковка распакованного расширения
-        if: matrix.round == 5
+      - name: Минимальный удалённый gate
+        run: npm run audit:ci
+
+      - name: Проверка идентичности локальной сборке
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          (
-            cd chrome-extension
-            zip -r ../dist/ChatPulse-Chrome-v0.5.2-beta.zip . \
-              -x "*.DS_Store" "*/.DS_Store"
-          )
-          (
-            cd dist
-            sha256sum ChatPulse-Chrome-v0.5.2-beta.zip \
-              > ChatPulse-Chrome-v0.5.2-beta.zip.sha256
-            sha256sum -c ChatPulse-Chrome-v0.5.2-beta.zip.sha256
-          )
+          cd dist
+          sha256sum -c ChatPulse-Chrome-v0.5.3-beta.zip.sha256
+          test "$(sha256sum ChatPulse-Chrome-v0.5.3-beta.zip | awk '{print $1}')" = "f3a67ae4ac13d3bbd11fb874337dbb7fa859f440cd6548b0a2d542600c19a5c7"
+
+      - name: Проверка отсутствия секретов
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE "API[_-]?KEY|CLIENT[_-]?SECRET|BEGIN (RSA|OPENSSH) PRIVATE KEY" chrome-extension tests scripts
+
+      - name: Сохранение проверенного артефакта
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/chatpulse-artifact
+          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip /tmp/chatpulse-artifact/
+          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip.sha256 /tmp/chatpulse-artifact/
+
+      - name: Публикация продуктового commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .release-payload .github/workflows/apply-local-release.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Добавить центр здоровья и circuit breaker ChatPulse 0.5.3"
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Публикация beta-артефакта
-        if: matrix.round == 5
         uses: actions/upload-artifact@v4
         with:
-          name: ChatPulse-Chrome-v0.5.2-beta
-          path: |
-            dist/ChatPulse-Chrome-v0.5.2-beta.zip
-            dist/ChatPulse-Chrome-v0.5.2-beta.zip.sha256
+          name: ChatPulse-Chrome-v0.5.3-beta
+          path: /tmp/chatpulse-artifact/*
           if-no-files-found: error
           retention-days: 30

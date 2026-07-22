@@ -2,13 +2,12 @@
 import Foundation
 import ChatPulseCore
 
-struct MonitorStatus: Sendable {
-    enum State: Sendable {
+struct MonitorStatus {
+    enum State {
         case stopped
         case idle
         case checking
         case sent(chatTitle: String)
-        case limit(chatTitle: String)
         case warning(String)
     }
 
@@ -17,21 +16,21 @@ struct MonitorStatus: Sendable {
     let nextCheckAt: Date?
 }
 
-final class MonitorCoordinator: @unchecked Sendable {
+@MainActor
+final class MonitorCoordinator {
     private let store: SettingsStoring
     private let browser: BrowserControlling
     private let engine = DecisionEngine()
     private let log: RingLog
-    private let workQueue = DispatchQueue(label: "app.chatpulse.monitor", qos: .utility)
-    private let lock = NSLock()
 
-    private var timer: DispatchSourceTimer?
-    private var isRunningStorage = false
-    private var isCheckingStorage = false
+    private var timer: Timer?
+    private var checkTask: Task<Void, Never>?
+    private var isChecking = false
     private var firstObservationIDs = Set<UUID>()
 
-    var onStatus: (@Sendable (MonitorStatus) -> Void)?
-    var onSettingsChanged: (@Sendable (AppSettings) -> Void)?
+    private(set) var isRunning = false
+    var onStatus: ((MonitorStatus) -> Void)?
+    var onSettingsChanged: ((AppSettings) -> Void)?
 
     init(store: SettingsStoring, browser: BrowserControlling, log: RingLog) {
         self.store = store
@@ -39,38 +38,20 @@ final class MonitorCoordinator: @unchecked Sendable {
         self.log = log
     }
 
-    var isRunning: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return isRunningStorage
-    }
-
     func start() {
-        lock.lock()
-        guard !isRunningStorage else {
-            lock.unlock()
-            return
-        }
-        isRunningStorage = true
-        lock.unlock()
-
-        workQueue.sync { [self] in
-            firstObservationIDs.removeAll()
-        }
-
-        log.append(LogEntry(level: .info, message: "Monitoring started"))
+        guard !isRunning else { return }
+        isRunning = true
+        firstObservationIDs.removeAll()
+        log.append(LogEntry(level: .info, message: "Наблюдение запущено"))
         scheduleTimer(runImmediately: true)
     }
 
     func stop() {
-        lock.lock()
-        isRunningStorage = false
-        let oldTimer = timer
+        isRunning = false
+        timer?.invalidate()
         timer = nil
-        lock.unlock()
-
-        oldTimer?.cancel()
-        log.append(LogEntry(level: .info, message: "Monitoring stopped"))
+        checkTask?.cancel()
+        log.append(LogEntry(level: .info, message: "Наблюдение остановлено"))
         publish(MonitorStatus(state: .stopped, checkedAt: nil, nextCheckAt: nil))
     }
 
@@ -80,10 +61,12 @@ final class MonitorCoordinator: @unchecked Sendable {
     }
 
     func checkNow() {
-        performCheck(ignoreRunningState: true)
+        launchCheck(ignoreRunningState: true)
     }
 
     private func scheduleTimer(runImmediately: Bool) {
+        timer?.invalidate()
+
         let settings: AppSettings
         do {
             settings = try store.load()
@@ -93,116 +76,138 @@ final class MonitorCoordinator: @unchecked Sendable {
         }
 
         let interval = AppSettings.clampedInterval(settings.checkIntervalSeconds)
-        let source = DispatchSource.makeTimerSource(queue: workQueue)
-        source.schedule(
-            deadline: .now() + (runImmediately ? 0.1 : interval),
-            repeating: interval,
-            leeway: .seconds(min(Int(interval / 10), 10))
-        )
-        source.setEventHandler { [weak self] in
-            self?.performCheck(ignoreRunningState: false)
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.launchCheck(ignoreRunningState: false)
+            }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
 
-        lock.lock()
-        let oldTimer = timer
-        timer = source
-        lock.unlock()
-
-        oldTimer?.cancel()
-        source.resume()
+        let delay = runImmediately ? 0.1 : interval
         publish(MonitorStatus(
             state: .idle,
             checkedAt: nil,
-            nextCheckAt: Date().addingTimeInterval(runImmediately ? 0.1 : interval)
+            nextCheckAt: Date().addingTimeInterval(delay)
         ))
+
+        if runImmediately {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                self?.launchCheck(ignoreRunningState: false)
+            }
+        }
     }
 
-    private func performCheck(ignoreRunningState: Bool) {
-        lock.lock()
-        let allowed = (isRunningStorage || ignoreRunningState) && !isCheckingStorage
-        if allowed { isCheckingStorage = true }
-        lock.unlock()
-        guard allowed else { return }
+    private func launchCheck(ignoreRunningState: Bool) {
+        guard (isRunning || ignoreRunningState), !isChecking else { return }
+        isChecking = true
+        checkTask = Task { @MainActor [weak self] in
+            await self?.performCheck(ignoreRunningState: ignoreRunningState)
+        }
+    }
 
-        workQueue.async { [weak self] in
-            guard let self else { return }
-            defer {
-                self.lock.lock()
-                self.isCheckingStorage = false
-                self.lock.unlock()
-            }
+    private func performCheck(ignoreRunningState: Bool) async {
+        defer {
+            isChecking = false
+            checkTask = nil
+        }
 
-            self.publish(MonitorStatus(state: .checking, checkedAt: nil, nextCheckAt: nil))
+        publish(MonitorStatus(state: .checking, checkedAt: nil, nextCheckAt: nil))
 
-            do {
-                var settings = try self.store.load()
-                let now = Date()
-                var notableState: MonitorStatus.State = .idle
+        do {
+            var settings = try store.load()
+            let now = Date()
+            var notableState: MonitorStatus.State = .idle
 
-                for index in settings.chats.indices where settings.chats[index].isEnabled {
-                    var chat = settings.chats[index]
-                    do {
-                        let snapshot = try self.browser.inspect(chat: chat)
-                        let isFirst = !self.firstObservationIDs.contains(chat.id)
-                        let result = self.engine.evaluate(
-                            chat: chat,
-                            snapshot: snapshot,
-                            now: now,
-                            isFirstObservationThisRun: isFirst
-                        )
-                        self.firstObservationIDs.insert(chat.id)
-                        chat = result.chat
+            for index in settings.chats.indices where settings.chats[index].isEnabled {
+                if Task.isCancelled { break }
+                var chat = settings.chats[index]
 
-                        switch result.decision {
-                        case .sendContinuation:
-                            guard let fingerprint = snapshot.latestFingerprint else { break }
-                            if !ignoreRunningState && !self.isRunning {
-                                self.log.append(LogEntry(level: .info, message: "Send cancelled because monitoring stopped"))
-                                break
-                            }
-                            try self.browser.send(command: settings.commandText, to: chat)
-                            chat = self.engine.recordSuccessfulSend(
-                                chat: chat,
-                                fingerprint: fingerprint,
-                                now: now
-                            )
-                            notableState = .sent(chatTitle: chat.title)
-                            self.log.append(LogEntry(level: .info, message: "Continuation sent to \(chat.title)"))
-                        case .technicalLimit:
-                            notableState = .limit(chatTitle: chat.title)
-                            self.log.append(LogEntry(level: .warning, message: "Technical limit detected in \(chat.title)"))
-                        case .pageError:
-                            notableState = .warning("Ошибка страницы: \(chat.title)")
-                            self.log.append(LogEntry(level: .warning, message: "Page error in \(chat.title)"))
-                        default:
-                            self.log.append(LogEntry(level: .debug, message: "\(chat.title): \(String(describing: result.decision))"))
+                do {
+                    let snapshot = try await browser.inspect(chat: chat)
+                    let isFirst = !firstObservationIDs.contains(chat.id)
+                    let result = engine.evaluate(
+                        chat: chat,
+                        snapshot: snapshot,
+                        now: now,
+                        isFirstObservationThisRun: isFirst
+                    )
+                    firstObservationIDs.insert(chat.id)
+                    chat = result.chat
+
+                    switch result.decision {
+                    case .sendContinuation:
+                        guard let fingerprint = snapshot.latestFingerprint else { break }
+                        guard !Task.isCancelled, ignoreRunningState || isRunning else {
+                            log.append(LogEntry(level: .info, message: "Отправка отменена: наблюдение остановлено"))
+                            break
                         }
-
-                        settings.chats[index] = chat
-                    } catch {
-                        notableState = .warning(error.localizedDescription)
-                        self.log.append(LogEntry(level: .error, message: "\(chat.title): \(error.localizedDescription)"))
+                        try await browser.send(command: settings.commandText, to: chat)
+                        chat = engine.recordSuccessfulSend(
+                            chat: chat,
+                            fingerprint: fingerprint,
+                            now: now
+                        )
+                        notableState = .sent(chatTitle: chat.title)
+                        log.append(LogEntry(level: .info, message: "Команда продолжения отправлена в «\(chat.title)»"))
+                    case .pageError:
+                        notableState = .warning("Ошибка страницы: \(chat.title)")
+                        log.append(LogEntry(level: .warning, message: "На странице чата «\(chat.title)» обнаружена ошибка"))
+                    default:
+                        log.append(LogEntry(
+                            level: .debug,
+                            message: "\(chat.title): \(russianDescription(for: result.decision))"
+                        ))
                     }
-                }
 
-                try self.store.save(settings)
-                self.onSettingsChanged?(settings)
-                self.publish(MonitorStatus(
-                    state: notableState,
-                    checkedAt: now,
-                    nextCheckAt: self.isRunning ? now.addingTimeInterval(settings.checkIntervalSeconds) : nil
-                ))
-            } catch {
-                self.log.append(LogEntry(level: .error, message: error.localizedDescription))
-                self.publish(MonitorStatus(state: .warning(error.localizedDescription), checkedAt: Date(), nextCheckAt: nil))
+                    settings.chats[index] = chat
+                } catch {
+                    notableState = .warning(error.localizedDescription)
+                    log.append(LogEntry(level: .error, message: "\(chat.title): \(error.localizedDescription)"))
+                }
             }
+
+            try store.save(settings)
+            onSettingsChanged?(settings)
+            publish(MonitorStatus(
+                state: notableState,
+                checkedAt: now,
+                nextCheckAt: isRunning ? now.addingTimeInterval(settings.checkIntervalSeconds) : nil
+            ))
+        } catch {
+            log.append(LogEntry(level: .error, message: error.localizedDescription))
+            publish(MonitorStatus(state: .warning(error.localizedDescription), checkedAt: Date(), nextCheckAt: nil))
+        }
+    }
+
+    private func russianDescription(for decision: MonitorDecision) -> String {
+        switch decision {
+        case .baselineRecorded:
+            return "зафиксировано исходное состояние"
+        case .responseChanged:
+            return "обнаружен новый ответ, ожидается следующая проверка"
+        case .sendContinuation:
+            return "нужно отправить продолжение"
+        case .waitingForAssistant:
+            return "последнее сообщение принадлежит пользователю"
+        case .generating:
+            return "ответ ещё создаётся"
+        case .pageError:
+            return "ошибка страницы"
+        case .pageNotReady:
+            return "страница ещё не готова"
+        case .noMessages:
+            return "сообщения не найдены"
+        case .disabled:
+            return "чат отключён"
+        case .alreadyContinued:
+            return "этот ответ уже продолжен"
         }
     }
 
     private func publish(_ status: MonitorStatus) {
-        DispatchQueue.main.async { [weak self] in
-            self?.onStatus?(status)
-        }
+        onStatus?(status)
     }
 }
 #endif

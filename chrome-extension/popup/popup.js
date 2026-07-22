@@ -11,11 +11,15 @@ const elements = {
   lastLog: document.querySelector("#lastLog"),
   themeButton: document.querySelector("#themeButton"),
   openOptionsButton: document.querySelector("#openOptionsButton"),
-  chatTemplate: document.querySelector("#chatTemplate")
+  chatTemplate: document.querySelector("#chatTemplate"),
+  versionLabel: document.querySelector("#versionLabel")
 };
 
 let currentState = null;
 let busy = false;
+
+const manifest = chrome.runtime.getManifest();
+elements.versionLabel.textContent = manifest.version_name || manifest.version;
 
 void refresh();
 
@@ -124,6 +128,7 @@ function chatStatus(chat) {
   if (!chat.enabled) return "Наблюдение отключено";
   if (chat.lastError) return chat.lastError;
   if (chat.lastCommandAt) return `Команда отправлена ${formatTime(chat.lastCommandAt)}`;
+  if (chat.lastRecoveryAt) return `Вкладка восстановлена ${formatTime(chat.lastRecoveryAt)}`;
   if (chat.lastObservedAt) return `Проверен ${formatTime(chat.lastObservedAt)}`;
   return "Ожидает первой проверки";
 }

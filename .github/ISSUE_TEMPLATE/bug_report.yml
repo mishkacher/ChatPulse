@@ -1,38 +1,26 @@
 name: Сообщение об ошибке
-description: Сообщить о воспроизводимой проблеме ChatPulse
+description: Сообщить о воспроизводимой проблеме Chrome-расширения ChatPulse
 title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Спасибо за сообщение. Не прикладывайте cookies, приватные URL чатов, email, одноразовые коды, passkey или содержимое личной переписки.
+        Не прикладывайте cookies, приватные URL чатов, email, коды входа или содержимое переписки.
 
   - type: input
     id: version
     attributes:
       label: Версия ChatPulse
-      description: Укажите версию из GitHub Release или Info приложения.
-      placeholder: 0.4.0
+      placeholder: 0.5.0 beta
     validations:
       required: true
 
   - type: input
-    id: macos
+    id: chrome
     attributes:
-      label: Версия macOS и модель Mac
-      placeholder: macOS 15.x, Apple Silicon
-    validations:
-      required: true
-
-  - type: dropdown
-    id: installation
-    attributes:
-      label: Способ установки
-      options:
-        - ZIP из GitHub Release
-        - Сборка из исходников
-        - Другое
+      label: Версия Chrome и операционная система
+      placeholder: Chrome 140, macOS 26
     validations:
       required: true
 
@@ -56,17 +44,17 @@ body:
     attributes:
       label: Шаги воспроизведения
       placeholder: |
-        1. Открыть...
-        2. Нажать...
-        3. Увидеть...
+        1. Открыть chrome://extensions...
+        2. Добавить тестовый чат...
+        3. Нажать...
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Безопасный фрагмент журнала
-      description: Удалите названия приватных чатов, URL и любые данные аккаунта.
+      label: Безопасный фрагмент журнала ChatPulse
+      description: Удалите названия чатов, URL и данные аккаунта.
       render: text
 
   - type: checkboxes
@@ -74,7 +62,7 @@ body:
     attributes:
       label: Проверки
       options:
-        - label: Я использую последнюю опубликованную версию.
+        - label: Я использую актуальную версию из main или последнего beta-артефакта.
           required: true
-        - label: Я удалил приватные URL, cookies, email, коды и содержимое переписки.
+        - label: Я удалил приватные URL, cookies и содержимое переписки.
           required: true

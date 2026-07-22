@@ -1,6 +1,8 @@
-.build/
-dist/
-.swiftpm/
 .DS_Store
-*.xcuserstate
-DerivedData/
+node_modules/
+dist/
+*.zip
+*.sha256
+npm-debug.log*
+.vscode/
+.idea/

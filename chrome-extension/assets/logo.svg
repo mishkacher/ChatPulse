@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="ChatPulse">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071126"/>
+      <stop offset="0.55" stop-color="#11183a"/>
+      <stop offset="1" stop-color="#24123d"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2c8cff"/>
+      <stop offset="1" stop-color="#9b5cff"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="58" fill="url(#bg)" stroke="#8299d4" stroke-width="4"/>
+  <path d="M42 137h39l18-67 29 118 25-82 18 31h43" fill="none" stroke="url(#pulse)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

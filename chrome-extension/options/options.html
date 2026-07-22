@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatPulse — настройки</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body data-theme="macos">
+  <div class="background-glow glow-one"></div>
+  <div class="background-glow glow-two"></div>
+
+  <main class="layout">
+    <header class="topbar">
+      <div class="brand">
+        <img src="../assets/logo.svg" alt="">
+        <div>
+          <h1>ChatPulse</h1>
+          <p>Локальное расширение Chrome · использует текущий вход ChatGPT</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <select id="themeSelect" aria-label="Скин интерфейса">
+          <option value="macos">macOS</option>
+          <option value="preview">ChatPulse Preview</option>
+        </select>
+        <button id="toggleButton" class="primary-button" type="button">Запустить</button>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="metric-card">
+        <span>Статус</span>
+        <strong id="statusValue">Загрузка…</strong>
+        <small id="statusDetail">Получение состояния расширения</small>
+      </article>
+      <article class="metric-card">
+        <span>Чаты</span>
+        <strong id="chatMetric">0</strong>
+        <small>включено для наблюдения</small>
+      </article>
+      <article class="metric-card">
+        <span>Последняя проверка</span>
+        <strong id="lastCheckMetric">—</strong>
+        <small id="nextCheckMetric">Следующая: —</small>
+      </article>
+    </section>
+
+    <section class="workspace-grid">
+      <article class="panel settings-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">Основные параметры</span>
+            <h2>Настройки наблюдения</h2>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Команда продолжения</span>
+          <textarea id="commandField" rows="3"></textarea>
+          <small>Команда вводится только в выбранные чаты после стабильного завершённого ответа.</small>
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Интервал проверки</span>
+            <select id="intervalSelect">
+              <option value="0.5">30 секунд</option>
+              <option value="1">1 минута</option>
+              <option value="2">2 минуты</option>
+              <option value="5">5 минут</option>
+              <option value="10">10 минут</option>
+              <option value="15">15 минут</option>
+              <option value="30">30 минут</option>
+              <option value="60">1 час</option>
+            </select>
+          </label>
+          <div class="field action-field">
+            <span>Ручное действие</span>
+            <button id="checkButton" class="secondary-button" type="button">Проверить сейчас</button>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="saveButton" class="primary-button" type="button">Сохранить настройки</button>
+          <button id="addCurrentButton" class="secondary-button" type="button">Добавить активный чат</button>
+        </div>
+
+        <div id="messageBar" class="message-bar" hidden></div>
+      </article>
+
+      <article class="panel info-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">Как работает</span>
+            <h2>Без отдельного входа</h2>
+          </div>
+        </div>
+        <ol class="steps">
+          <li><span>1</span><p>Войдите в ChatGPT обычным способом в Google Chrome.</p></li>
+          <li><span>2</span><p>Откройте нужный разговор и нажмите «Добавить активный чат».</p></li>
+          <li><span>3</span><p>ChatPulse проверяет сохранённые вкладки последовательно и не читает cookies.</p></li>
+          <li><span>4</span><p>Новый ответ сначала фиксируется. Команда отправляется только на следующей неизменной проверке.</p></li>
+        </ol>
+        <div class="privacy-note">
+          Доступ ограничен доменами <code>chatgpt.com</code> и <code>chat.openai.com</code>. Данные остаются в <code>chrome.storage.local</code>.
+        </div>
+      </article>
+    </section>
+
+    <section class="panel chats-panel">
+      <div class="panel-heading split-heading">
+        <div>
+          <span class="eyebrow">Управление</span>
+          <h2>Отслеживаемые чаты</h2>
+        </div>
+        <button id="addCurrentTopButton" class="secondary-button" type="button">Добавить текущий</button>
+      </div>
+      <div id="chatTable" class="chat-table"></div>
+    </section>
+
+    <section class="panel logs-panel">
+      <div class="panel-heading split-heading">
+        <div>
+          <span class="eyebrow">Диагностика</span>
+          <h2>Журнал действий</h2>
+        </div>
+        <button id="clearLogsButton" class="secondary-button danger-soft" type="button">Очистить журнал</button>
+      </div>
+      <div id="logList" class="log-list"></div>
+    </section>
+
+    <footer>
+      <span>ChatPulse 0.5.0 beta</span>
+      <span>Chrome Manifest V3 · без Apple-подписи</span>
+    </footer>
+  </main>
+
+  <template id="chatRowTemplate">
+    <article class="chat-row">
+      <div class="chat-identity">
+        <span class="status-dot"></span>
+        <div>
+          <strong class="chat-title"></strong>
+          <small class="chat-url"></small>
+        </div>
+      </div>
+      <div class="chat-runtime">
+        <span class="chat-runtime-text"></span>
+      </div>
+      <div class="chat-actions">
+        <button class="open-chat secondary-button" type="button">Открыть</button>
+        <button class="toggle-chat secondary-button" type="button"></button>
+        <button class="remove-chat icon-danger" type="button" aria-label="Удалить чат">×</button>
+      </div>
+    </article>
+  </template>
+
+  <template id="logTemplate">
+    <article class="log-entry">
+      <time></time>
+      <span class="log-level"></span>
+      <p></p>
+    </article>
+  </template>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

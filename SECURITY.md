@@ -1,51 +1,34 @@
-# Политика безопасности
+# Security Policy
 
-## Поддерживаемые версии
+## Supported version
 
-| Версия | Поддержка |
-|---|---|
-| `0.4.x` | Да |
-| `< 0.4.0` | Нет |
+Security fixes are applied to the current Chrome extension beta in `main`.
 
-Исправления безопасности выпускаются для последней опубликованной линии. Пользователям рекомендуется обновляться до самого нового GitHub Release.
+## Reporting a vulnerability
 
-## Модель безопасности
+Use a private GitHub Security Advisory:
 
-ChatPulse использует системный компонент `WKWebView` и отдельное постоянное хранилище WebKit.
+`https://github.com/mishkacher/ChatPulse/security/advisories/new`
 
-Приложение:
+Do not publish sensitive information in a public issue. Never attach:
 
-- принимает только URL разговоров на `chatgpt.com` и `chat.openai.com`;
-- не читает cookies Safari, Chrome или других браузеров;
-- не хранит пароли в собственном файле настроек;
-- не читает и не сохраняет email, одноразовые коды или passkey;
-- не получает доступ к почтовому ящику пользователя;
-- не создаёт passkey самостоятельно и не получает закрытый ключ;
-- передаёт WebAuthn-запрос системному WebKit и интерфейсу macOS;
-- выполняет email-код и passkey только на официальных страницах OpenAI;
-- блокирует Google OAuth внутри встроенного WebView вместо попыток обхода ограничений провайдера;
-- не отправляет телеметрию;
-- не вызывает внешний ИИ или платный API;
-- сохраняет рабочие настройки локально;
-- отправляет только настроенную команду;
-- фиксирует попытку после фактического клика, чтобы не повторять одну команду;
-- не пытается обходить технические лимиты.
+- cookies or exported browser profiles;
+- email addresses, passwords, one-time codes or passkeys;
+- private ChatGPT conversation URLs;
+- conversation contents;
+- screenshots containing account or billing information.
 
-Код страницы выполняется только внутри собственных WebKit-представлений ChatPulse. JavaScript-помощники входа находят и активируют элементы официальной страницы; они не экспортируют введённые значения и не выполняют отдельные сетевые запросы от имени ChatPulse.
+## Security boundaries
 
-## Подписание релизов
+ChatPulse:
 
-Публичный релиз `0.4.0` имеет ad-hoc code signature и hardened runtime. Он не подписан Apple Developer ID и не нотарифицирован Apple. Это ограничение распространения, а не заявление о прохождении проверки Apple.
+- runs locally in Google Chrome;
+- has no backend and no telemetry;
+- restricts host access to `chatgpt.com` and `chat.openai.com`;
+- does not request `cookies`, `history`, `webRequest`, `debugger`, `nativeMessaging` or `<all_urls>`;
+- stores settings in `chrome.storage.local`;
+- records only technical response fingerprints for duplicate prevention.
 
-Проверяйте SHA-256 файл релиза перед установкой. Не отключайте Gatekeeper целиком; при необходимости подтвердите первый запуск через **Открыть** или Privacy & Security.
+## User responsibilities
 
-## Сообщение об уязвимости
-
-Используйте приватный Security Advisory репозитория. Не публикуйте приватные URL чатов, cookies, email, одноразовые коды, содержимое переписки или диагностические данные сессии в открытых issue.
-
-В сообщении укажите:
-
-- версию ChatPulse и macOS;
-- краткое описание влияния;
-- безопасные шаги воспроизведения без секретов;
-- ожидаемое и фактическое поведение.
+Install the unpacked extension only from a trusted copy of this repository. Review `manifest.json` before loading it and re-check permissions after updates.

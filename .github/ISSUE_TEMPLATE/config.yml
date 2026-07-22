@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Сообщить об уязвимости
     url: https://github.com/mishkacher/ChatPulse/security/advisories/new
-    about: Используйте приватный Security Advisory и не публикуйте секреты в открытом issue.
-  - name: Документация установки
-    url: https://github.com/mishkacher/ChatPulse/blob/main/docs/SETUP.md
-    about: Проверьте инструкции и устранение неполадок перед созданием issue.
+    about: Используйте приватный Security Advisory и не публикуйте секреты.
+  - name: Установка и устранение неполадок
+    url: https://github.com/mishkacher/ChatPulse/blob/main/SUPPORT.md
+    about: Проверьте инструкции перед созданием issue.

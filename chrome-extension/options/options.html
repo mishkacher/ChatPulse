@@ -83,7 +83,7 @@
 
         <div class="button-row">
           <button id="saveButton" class="primary-button" type="button">Сохранить настройки</button>
-          <button id="addCurrentButton" class="secondary-button" type="button">Добавить активный чат</button>
+          <button id="addCurrentButton" class="secondary-button" type="button">Добавить последний чат ChatGPT</button>
         </div>
 
         <div id="messageBar" class="message-bar" hidden></div>
@@ -98,7 +98,7 @@
         </div>
         <ol class="steps">
           <li><span>1</span><p>Войдите в ChatGPT обычным способом в Google Chrome.</p></li>
-          <li><span>2</span><p>Откройте нужный разговор и нажмите «Добавить активный чат».</p></li>
+          <li><span>2</span><p>Откройте нужный разговор и нажмите «Добавить последний чат ChatGPT».</p></li>
           <li><span>3</span><p>ChatPulse проверяет сохранённые вкладки последовательно и не читает cookies.</p></li>
           <li><span>4</span><p>Новый ответ сначала фиксируется. Команда отправляется только на следующей неизменной проверке.</p></li>
         </ol>
@@ -114,7 +114,7 @@
           <span class="eyebrow">Управление</span>
           <h2>Отслеживаемые чаты</h2>
         </div>
-        <button id="addCurrentTopButton" class="secondary-button" type="button">Добавить текущий</button>
+        <button id="addCurrentTopButton" class="secondary-button" type="button">Добавить последний чат</button>
       </div>
       <div id="chatTable" class="chat-table"></div>
     </section>
@@ -131,7 +131,7 @@
     </section>
 
     <footer>
-      <span>ChatPulse 0.5.0 beta</span>
+      <span id="versionLabel"></span>
       <span>Chrome Manifest V3 · без Apple-подписи</span>
     </footer>
   </main>

@@ -1,0 +1,277 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 390px;
+  min-height: 560px;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+body[data-theme="macos"] {
+  --page-bg: #f5f5f7;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: #ffffff;
+  --text: #17171a;
+  --muted: #6e6e73;
+  --border: rgba(0, 0, 0, 0.10);
+  --accent-a: #0a84ff;
+  --accent-b: #5e5ce6;
+  --control: #ececf1;
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  body[data-theme="macos"] {
+    --page-bg: #1c1c1e;
+    --panel: rgba(44, 44, 46, 0.88);
+    --panel-strong: #2c2c2e;
+    --text: #f5f5f7;
+    --muted: #aeaeb2;
+    --border: rgba(255, 255, 255, 0.10);
+    --control: #3a3a3c;
+    --shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+  }
+}
+
+body[data-theme="preview"] {
+  --page-bg: linear-gradient(145deg, #071126 0%, #11183a 56%, #24123d 100%);
+  --panel: rgba(23, 26, 40, 0.84);
+  --panel-strong: #171a28;
+  --text: #ffffff;
+  --muted: #aab4d2;
+  --border: rgba(126, 144, 194, 0.32);
+  --accent-a: #2c8cff;
+  --accent-b: #9b5cff;
+  --control: #222638;
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+button, select { font: inherit; }
+button { color: inherit; }
+
+.shell {
+  min-height: 560px;
+  padding: 16px;
+  background: var(--page-bg);
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 42px 1fr 34px;
+  gap: 11px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.logo { width: 42px; height: 42px; border-radius: 12px; }
+.header h1 { margin: 0; font-size: 19px; letter-spacing: -0.02em; }
+.header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+
+.icon-button,
+.text-button,
+.secondary-button,
+.primary-button,
+.chat-toggle,
+.chat-remove,
+.chat-main {
+  border: 0;
+  cursor: pointer;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--control);
+  border: 1px solid var(--border);
+}
+
+.hero-card,
+.section,
+.settings-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  border-radius: 16px;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.hero-card strong { font-size: 16px; }
+
+.primary-button {
+  min-width: 112px;
+  padding: 10px 15px;
+  border-radius: 11px;
+  color: white;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  box-shadow: 0 8px 22px rgba(44, 140, 255, 0.28);
+}
+
+.primary-button[data-running="true"] {
+  background: var(--control);
+  color: var(--text);
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin: 10px 0;
+}
+
+.secondary-button {
+  padding: 10px 8px;
+  border-radius: 11px;
+  background: var(--control);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 13px;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+}
+
+.settings-row label { color: var(--muted); font-size: 12px; }
+.settings-row select {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 9px;
+  color: var(--text);
+  background: var(--control);
+}
+
+.section {
+  border-radius: 15px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.section-title h2 { margin: 0; font-size: 13px; }
+.section-title span {
+  min-width: 24px;
+  text-align: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--control);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat-list { display: grid; gap: 7px; max-height: 205px; overflow: auto; }
+.chat-list:empty::after {
+  content: "Откройте чат ChatGPT и нажмите «Добавить текущий чат».";
+  display: block;
+  padding: 18px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chat-card {
+  display: grid;
+  grid-template-columns: 1fr 34px 28px;
+  align-items: center;
+  gap: 5px;
+  border-radius: 11px;
+  background: var(--control);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.chat-main {
+  display: grid;
+  grid-template-columns: 9px 1fr;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  padding: 9px 4px 9px 10px;
+}
+
+.chat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34c759;
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.12);
+}
+
+.chat-card[data-enabled="false"] .chat-dot { background: #8e8e93; box-shadow: none; }
+.chat-copy { min-width: 0; }
+.chat-title,
+.chat-status {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-title { font-size: 12px; }
+.chat-status { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+.chat-toggle,
+.chat-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+}
+.chat-toggle::before { content: "✓"; }
+.chat-card[data-enabled="false"] .chat-toggle::before { content: "○"; }
+.chat-remove { color: #ff453a; font-size: 20px; }
+
+.log-section { min-height: 67px; }
+.last-log { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 3px 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.text-button { background: transparent; padding: 0; color: var(--accent-a); font-size: 11px; }
+
+button:disabled { cursor: progress; opacity: 0.55; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent-a); outline-offset: 2px; }

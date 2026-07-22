@@ -18,6 +18,7 @@ def main() -> int:
     engine = read("Sources/ChatPulseCore/DecisionEngine.swift")
     merger = read("Sources/ChatPulseCore/SettingsMerger.swift")
     authentication = read("Sources/ChatPulseCore/AuthenticationURL.swift")
+    login_support = read("Sources/ChatPulseCore/LoginSupport.swift")
     webkit = read("Sources/ChatPulseApp/WebKitBrowserController.swift")
     browser_window = read("Sources/ChatPulseApp/BrowserWindowController.swift")
     app = read("Sources/ChatPulseApp/AppDelegate.swift")
@@ -25,6 +26,7 @@ def main() -> int:
     store = read("Sources/ChatPulseCore/SettingsStore.swift")
     package = read("Package.swift")
     installer = read("scripts/install_app.sh")
+    build_script = read("scripts/build_app.sh")
     readme = read("README.md")
     workflow = read(".github/workflows/ci.yml") if (ROOT / ".github/workflows/ci.yml").exists() else ""
 
@@ -59,20 +61,26 @@ def main() -> int:
             and "lastObservedFingerprint" in merger,
         ),
         (
-            "18 WebKit-попапы ограничены и Google OAuth перехвачен",
-            "WKWebView" in webkit + browser_window
-            and "Google Chrome" not in webkit + app
-            and "popupWindows" in browser_window
+            "18 WebKit-вход: Google перехвачен, email-код и passkey реализованы",
+            "popupWindows" in browser_window
             and "constrainedFrame" in browser_window
             and "AuthenticationURL.isGoogleSignIn" in browser_window
-            and "accounts.google.com" in authentication,
+            and "accounts.google.com" in authentication
+            and "beginEmailCodeLogin" in browser_window
+            and "requestEmailCodeOnCurrentPage" in browser_window
+            and "beginPasskeyLogin" in browser_window
+            and "emailCodePreparationJavaScript" in login_support
+            and "requestEmailCodeJavaScript" in login_support
+            and "PublicKeyCredential" in login_support
+            and "isUserVerifyingPlatformAuthenticatorAvailable" in login_support,
         ),
         (
             "19 CI и установка не зависят от executable-бита",
             "swift test" in workflow
             and "build_app.sh" in workflow
             and 'bash "$BUILD_SCRIPT"' in installer
-            and 'git clone --depth 1' in readme,
+            and 'git clone --depth 1' in readme
+            and "0.3.0" in build_script,
         ),
         ("20 нет внешнего ИИ или платного API", not re.search(r"Anthropic|Ollama|API_KEY", package, re.I)),
     ]

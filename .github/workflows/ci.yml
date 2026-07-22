@@ -36,6 +36,15 @@ jobs:
           fi
           tail -n 30 swift-test.log
 
+      - name: Диагностический лог Swift — цикл ${{ matrix.round }}
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatPulse-swift-log-${{ matrix.round }}
+          path: swift-test.log
+          if-no-files-found: error
+          retention-days: 7
+
       - name: 20 проверок качества — цикл ${{ matrix.round }}
         run: python3 scripts/quality_gate.py
 

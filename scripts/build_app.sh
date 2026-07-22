@@ -110,9 +110,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.0</string>
+  <string>0.4.0</string>
   <key>CFBundleVersion</key>
-  <string>4</string>
+  <string>5</string>
   <key>CFBundleIconFile</key>
   <string>ChatPulse</string>
   <key>LSMinimumSystemVersion</key>

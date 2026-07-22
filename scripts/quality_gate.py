@@ -16,6 +16,7 @@ def read(path: str) -> str:
 def main() -> int:
     models = read("Sources/ChatPulseCore/Models.swift")
     engine = read("Sources/ChatPulseCore/DecisionEngine.swift")
+    merger = read("Sources/ChatPulseCore/SettingsMerger.swift")
     webkit = read("Sources/ChatPulseApp/WebKitBrowserController.swift")
     browser_window = read("Sources/ChatPulseApp/BrowserWindowController.swift")
     app = read("Sources/ChatPulseApp/AppDelegate.swift")
@@ -41,7 +42,13 @@ def main() -> int:
         ("14 детектор технического лимита удалён", "limitDetected" not in models + engine + webkit and "technicalLimit" not in models + engine),
         ("15 обработка ошибок страницы", "errorDetected" in webkit),
         ("16 подтверждение фактической отправки", "confirmSendJavaScript" in webkit and '"confirmed"' in webkit),
-        ("17 остановка отменяет отправку", "Отправка отменена: наблюдение остановлено" in coordinator),
+        (
+            "17 остановка и изменения пользователя защищены",
+            "Отправка отменена: наблюдение остановлено" in coordinator
+            and "liveSettings.chats.contains" in coordinator
+            and "SettingsMerger.mergeRuntimeState" in coordinator
+            and "lastObservedFingerprint" in merger,
+        ),
         ("18 встроенный WebKit без Chrome", "WKWebView" in webkit + browser_window and "Google Chrome" not in webkit + app),
         ("19 CI проверяет тесты и сборку", "swift test" in workflow and "build_app.sh" in workflow),
         ("20 нет внешнего ИИ или платного API", not re.search(r"Anthropic|Ollama|API_KEY", package, re.I)),

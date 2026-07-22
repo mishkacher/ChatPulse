@@ -1,10 +1,10 @@
 import Foundation
 
 public enum LogLevel: String, Sendable {
-    case debug = "DEBUG"
-    case info = "INFO"
-    case warning = "WARN"
-    case error = "ERROR"
+    case debug = "ОТЛАДКА"
+    case info = "ИНФО"
+    case warning = "ВНИМАНИЕ"
+    case error = "ОШИБКА"
 }
 
 public struct LogEntry: Sendable {

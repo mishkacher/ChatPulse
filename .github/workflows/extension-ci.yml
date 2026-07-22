@@ -1,0 +1,89 @@
+name: Chrome Extension CI
+
+on:
+  push:
+    branches:
+      - "feature/chrome-extension"
+      - "feature/chrome-extension/**"
+    paths:
+      - "chrome-extension/**"
+      - "tests/chrome-extension/**"
+      - "scripts/validate_extension.mjs"
+      - "package.json"
+      - ".github/workflows/extension-ci.yml"
+  pull_request:
+    paths:
+      - "chrome-extension/**"
+      - "tests/chrome-extension/**"
+      - "scripts/validate_extension.mjs"
+      - "package.json"
+      - ".github/workflows/extension-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-extension:
+    name: Chrome-цикл ${{ matrix.round }}/5
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3, 4, 5]
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Проверка синтаксиса — цикл ${{ matrix.round }}
+        run: npm run check:syntax
+
+      - name: Модульные тесты — цикл ${{ matrix.round }}
+        run: npm test
+
+      - name: Аудит Manifest V3 — цикл ${{ matrix.round }}
+        run: npm run validate:extension
+
+      - name: Проверка отсутствия секретов и сборочных зависимостей
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE "API[_-]?KEY|CLIENT[_-]?SECRET|BEGIN (RSA|OPENSSH) PRIVATE KEY" chrome-extension
+          test ! -d chrome-extension/node_modules
+          test ! -f chrome-extension/package-lock.json
+
+      - name: Упаковка распакованного расширения
+        if: matrix.round == 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (
+            cd chrome-extension
+            zip -r ../dist/ChatPulse-Chrome-v0.5.0-beta.zip . \
+              -x "*.DS_Store" "*/.DS_Store"
+          )
+          sha256sum dist/ChatPulse-Chrome-v0.5.0-beta.zip \
+            > dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+          sha256sum -c dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+
+      - name: Публикация beta-артефакта
+        if: matrix.round == 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatPulse-Chrome-v0.5.0-beta
+          path: |
+            dist/ChatPulse-Chrome-v0.5.0-beta.zip
+            dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+          if-no-files-found: error
+          retention-days: 30

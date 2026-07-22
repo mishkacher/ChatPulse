@@ -13,28 +13,30 @@ final class SkinStatusMenuInstaller: NSObject {
     static let shared = SkinStatusMenuInstaller()
 
     private let parentIdentifier = NSUserInterfaceItemIdentifier("chatpulse.status.skin")
-    private var observer: NSObjectProtocol?
+    private var isStarted = false
 
     private override init() {
         super.init()
     }
 
     func start() {
-        guard observer == nil else { return }
+        guard !isStarted else { return }
+        isStarted = true
 
-        observer = NotificationCenter.default.addObserver(
-            forName: NSMenu.didAddItemNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            // `queue: .main` гарантирует синхронное выполнение на главном потоке.
-            // `assumeIsolated` сообщает это Swift 6 и не пересылает NSMenu между
-            // concurrency-доменами.
-            MainActor.assumeIsolated {
-                guard let menu = notification.object as? NSMenu else { return }
-                self?.installOrRefresh(in: menu)
-            }
-        }
+        // Selector-based API вызывается синхронно на том потоке, где AppKit
+        // изменяет меню. Все меню ChatPulse строятся на MainActor, поэтому здесь
+        // нет передачи NSMenu/Notification между Sendable-замыканиями Swift 6.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(menuDidAddItem(_:)),
+            name: NSMenu.didAddItemNotification,
+            object: nil
+        )
+    }
+
+    @objc private func menuDidAddItem(_ notification: Notification) {
+        guard let menu = notification.object as? NSMenu else { return }
+        installOrRefresh(in: menu)
     }
 
     private func installOrRefresh(in menu: NSMenu) {

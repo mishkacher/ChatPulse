@@ -2,7 +2,7 @@ import XCTest
 @testable import ChatPulseCore
 
 final class SettingsMergerTests: XCTestCase {
-    func testPreservesLatestUserConfigurationAndMergesRuntimeState() {
+    func testPreservesLatestUserConfigurationAndMergesRuntimeState() throws {
         let chatID = UUID()
         let addedChatID = UUID()
         let observedAt = Date(timeIntervalSince1970: 1_700_000_100)

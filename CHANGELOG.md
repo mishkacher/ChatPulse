@@ -11,6 +11,6 @@
 - added local logs, settings and manual diagnostics;
 - limited permissions to `alarms`, `scripting`, `storage` and `tabs`;
 - added five-cycle CI, ZIP packaging and SHA-256 validation;
-- removed the native macOS/WebKit implementation from `main`.
+- removed the native macOS/WebKit implementation from the active repository branches.
 
-The previous 0.4.0 source remains available only in `legacy/macos-webkit-v0.4.0` for historical reference.
+The current repository is Chrome-extension-only.

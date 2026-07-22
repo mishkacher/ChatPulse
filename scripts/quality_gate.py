@@ -23,6 +23,7 @@ def main() -> int:
     coordinator = read("Sources/ChatPulseApp/MonitorCoordinator.swift")
     store = read("Sources/ChatPulseCore/SettingsStore.swift")
     package = read("Package.swift")
+    installer = read("scripts/install_app.sh")
     workflow = read(".github/workflows/ci.yml") if (ROOT / ".github/workflows/ci.yml").exists() else ""
 
     checks: list[tuple[str, bool]] = [
@@ -56,7 +57,12 @@ def main() -> int:
             and "lastObservedFingerprint" in merger,
         ),
         ("18 встроенный WebKit без Chrome", "WKWebView" in webkit + browser_window and "Google Chrome" not in webkit + app),
-        ("19 CI проверяет тесты и сборку", "swift test" in workflow and "build_app.sh" in workflow),
+        (
+            "19 CI и установка не зависят от executable-бита",
+            "swift test" in workflow
+            and "build_app.sh" in workflow
+            and 'bash "$BUILD_SCRIPT"' in installer,
+        ),
         ("20 нет внешнего ИИ или платного API", not re.search(r"Anthropic|Ollama|API_KEY", package, re.I)),
     ]
 

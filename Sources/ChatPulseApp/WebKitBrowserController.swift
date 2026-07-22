@@ -8,7 +8,7 @@ import ChatPulseCore
 protocol BrowserControlling: AnyObject {
     func captureCurrentChat() throws -> (title: String, url: String)
     func inspect(chat: MonitoredChat) async throws -> BrowserSnapshot
-    func send(command: String, to chat: MonitoredChat) async throws
+    func send(command: String, to chat: MonitoredChat) async throws -> CommandSendOutcome
     func open(chat: MonitoredChat)
     func showBrowser()
 }
@@ -40,7 +40,7 @@ enum WebKitBrowserError: LocalizedError {
         case .sendUnavailable:
             return "Кнопка отправки сейчас недоступна. ChatPulse повторит попытку при следующей проверке."
         case .sendFailed(let message):
-            return "Не удалось подтвердить отправку команды: \(message)"
+            return "Не удалось отправить команду: \(message)"
         }
     }
 }
@@ -111,7 +111,12 @@ final class WebKitBrowserController: NSObject, BrowserControlling {
         return snapshot
     }
 
-    func send(command: String, to chat: MonitoredChat) async throws {
+    /// Отправляет команду и возвращает результат после фактического клика.
+    ///
+    /// Ошибки до клика безопасно повторяются на следующей проверке. После клика метод
+    /// никогда не просит повторять команду: если DOM-подтверждение не появилось вовремя,
+    /// возвращается `.submittedUnconfirmed`, чтобы сохранить at-most-once семантику.
+    func send(command: String, to chat: MonitoredChat) async throws -> CommandSendOutcome {
         if ChatURL.normalized(monitorWebView.url?.absoluteString ?? "") != ChatURL.normalized(chat.url) {
             try await loadChat(chat)
         }
@@ -142,10 +147,11 @@ final class WebKitBrowserController: NSObject, BrowserControlling {
             try await Task.sleep(nanoseconds: 500_000_000)
             let result = try await evaluateString(confirmationScript, in: monitorWebView)
             if result == "confirmed" {
-                return
+                return .confirmed
             }
         }
-        throw WebKitBrowserError.sendFailed("сообщение не появилось в чате")
+
+        return .submittedUnconfirmed
     }
 
     private func loadChat(_ chat: MonitoredChat) async throws {

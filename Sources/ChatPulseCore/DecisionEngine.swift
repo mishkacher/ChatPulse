@@ -59,14 +59,21 @@ public struct DecisionEngine: Sendable {
         return EvaluationResult(chat: chat, decision: .sendContinuation)
     }
 
-    public func recordSuccessfulSend(
+    /// Фиксирует команду после фактического нажатия кнопки отправки.
+    ///
+    /// Даже если DOM-подтверждение не успело появиться, отпечаток считается обработанным.
+    /// Это обеспечивает at-most-once поведение и исключает повторную команду после
+    /// неопределённого результата интерфейса.
+    public func recordDispatchedCommand(
         chat original: MonitoredChat,
         fingerprint: String,
-        now: Date
+        now: Date,
+        outcome: CommandSendOutcome
     ) -> MonitoredChat {
         var chat = original
         chat.lastCommandedFingerprint = fingerprint
         chat.lastCommandAt = now
+        chat.lastCommandOutcome = outcome
         return chat
     }
 }

@@ -155,14 +155,30 @@ final class MonitorCoordinator {
                             break
                         }
 
-                        try await browser.send(command: liveSettings.commandText, to: chat)
-                        chat = engine.recordSuccessfulSend(
+                        let outcome = try await browser.send(command: liveSettings.commandText, to: chat)
+                        chat = engine.recordDispatchedCommand(
                             chat: chat,
                             fingerprint: fingerprint,
-                            now: now
+                            now: now,
+                            outcome: outcome
                         )
-                        notableState = .sent(chatTitle: chat.title)
-                        log.append(LogEntry(level: .info, message: "Команда продолжения отправлена в «\(chat.title)»"))
+
+                        switch outcome {
+                        case .confirmed:
+                            notableState = .sent(chatTitle: chat.title)
+                            log.append(LogEntry(
+                                level: .info,
+                                message: "Команда продолжения отправлена в «\(chat.title)»"
+                            ))
+                        case .submittedUnconfirmed:
+                            notableState = .warning(
+                                "Команда отправлена в «\(chat.title)», но интерфейс не подтвердил её появление"
+                            )
+                            log.append(LogEntry(
+                                level: .warning,
+                                message: "Кнопка отправки нажата в «\(chat.title)», подтверждение DOM не получено; повтор заблокирован"
+                            ))
+                        }
                     case .pageError:
                         notableState = .warning("Ошибка страницы: \(chat.title)")
                         log.append(LogEntry(level: .warning, message: "На странице чата «\(chat.title)» обнаружена ошибка"))

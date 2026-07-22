@@ -36,7 +36,13 @@ def main() -> int:
         ("08 атомарная запись настроек", ".atomic" in store),
         ("09 пассивная первая проверка", "isFirstObservationThisRun" in engine),
         ("10 ожидание после нового ответа", ".responseChanged" in engine),
-        ("11 защита от повтора", "lastCommandedFingerprint" in engine),
+        (
+            "11 at-most-once защита от повтора",
+            "lastCommandedFingerprint" in engine
+            and "CommandSendOutcome" in models
+            and "submittedUnconfirmed" in webkit
+            and "recordDispatchedCommand" in coordinator,
+        ),
         ("12 ожидание ответа ассистента", "latestRole == .assistant" in engine),
         ("13 определение продолжающейся генерации", "stop-button" in webkit),
         ("14 детектор технического лимита удалён", "limitDetected" not in models + engine + webkit and "technicalLimit" not in models + engine),

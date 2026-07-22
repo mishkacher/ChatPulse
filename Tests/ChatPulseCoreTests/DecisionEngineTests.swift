@@ -111,14 +111,38 @@ final class DecisionEngineTests: XCTestCase {
         )
     }
 
-    func testSuccessfulSendStoresFingerprintAndTimestamp() {
-        let chat = engine.recordSuccessfulSend(
+    func testConfirmedDispatchStoresFingerprintTimestampAndOutcome() {
+        let chat = engine.recordDispatchedCommand(
             chat: MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc"),
             fingerprint: "answer-2",
-            now: now
+            now: now,
+            outcome: .confirmed
         )
         XCTAssertEqual(chat.lastCommandedFingerprint, "answer-2")
         XCTAssertEqual(chat.lastCommandAt, now)
+        XCTAssertEqual(chat.lastCommandOutcome, .confirmed)
+    }
+
+    func testUnconfirmedDispatchStillBlocksDuplicate() {
+        let chat = engine.recordDispatchedCommand(
+            chat: MonitoredChat(
+                title: "Ядро",
+                url: "https://chatgpt.com/c/abc",
+                lastObservedFingerprint: "answer-2"
+            ),
+            fingerprint: "answer-2",
+            now: now,
+            outcome: .submittedUnconfirmed
+        )
+
+        XCTAssertEqual(chat.lastCommandOutcome, .submittedUnconfirmed)
+        let next = engine.evaluate(
+            chat: chat,
+            snapshot: snapshot(role: .assistant, fingerprint: "answer-2"),
+            now: now.addingTimeInterval(300),
+            isFirstObservationThisRun: false
+        )
+        XCTAssertEqual(next.decision, .alreadyContinued)
     }
 
     func testFullCycleWaitsOneIntervalAfterEveryNewAssistantResponse() {
@@ -140,10 +164,11 @@ final class DecisionEngineTests: XCTestCase {
             isFirstObservationThisRun: false
         )
         XCTAssertEqual(result.decision, .sendContinuation)
-        chat = engine.recordSuccessfulSend(
+        chat = engine.recordDispatchedCommand(
             chat: result.chat,
             fingerprint: "answer-1",
-            now: now.addingTimeInterval(300)
+            now: now.addingTimeInterval(300),
+            outcome: .confirmed
         )
 
         result = engine.evaluate(

@@ -20,7 +20,8 @@ final class SettingsMergerTests: XCTestCase {
                     lastObservedFingerprint: "answer-2",
                     lastCommandedFingerprint: "answer-1",
                     lastObservedAt: observedAt,
-                    lastCommandAt: commandedAt
+                    lastCommandAt: commandedAt,
+                    lastCommandOutcome: .submittedUnconfirmed
                 )
             ]
         )
@@ -56,10 +57,12 @@ final class SettingsMergerTests: XCTestCase {
         XCTAssertEqual(existing.lastCommandedFingerprint, "answer-1")
         XCTAssertEqual(existing.lastObservedAt, observedAt)
         XCTAssertEqual(existing.lastCommandAt, commandedAt)
+        XCTAssertEqual(existing.lastCommandOutcome, .submittedUnconfirmed)
 
         let added = try XCTUnwrap(merged.chats.first { $0.id == addedChatID })
         XCTAssertNil(added.lastObservedFingerprint)
         XCTAssertNil(added.lastCommandedFingerprint)
+        XCTAssertNil(added.lastCommandOutcome)
     }
 
     func testDoesNotRestoreChatDeletedDuringCheck() {
@@ -99,5 +102,6 @@ final class SettingsMergerTests: XCTestCase {
         XCTAssertEqual(chat.id, newID)
         XCTAssertNil(chat.lastObservedFingerprint)
         XCTAssertNil(chat.lastCommandedFingerprint)
+        XCTAssertNil(chat.lastCommandOutcome)
     }
 }

@@ -2,6 +2,7 @@
   if (globalThis.__chatPulseContentScriptInstalled) return;
   globalThis.__chatPulseContentScriptInstalled = true;
 
+  const CONTENT_SCRIPT_VERSION = "0.5.1";
   const MESSAGE_SELECTOR = "[data-message-author-role], article[data-testid^='conversation-turn-']";
   const INPUT_SELECTORS = [
     "#prompt-textarea",
@@ -12,11 +13,27 @@
     "[contenteditable='true']"
   ];
 
+  let lastDomMutationAt = Date.now();
+  let lastRelevantMutationAt = Date.now();
+  let generationStartedAt = null;
+
+  installMutationObserver();
+  updateGenerationClock();
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return false;
 
     if (message.type === "CHATPULSE_PING") {
-      sendResponse({ ok: true, url: location.href });
+      sendResponse({
+        ok: true,
+        url: location.href,
+        observedAt: new Date().toISOString(),
+        lastDomMutationAt,
+        lastRelevantMutationAt,
+        visibilityState: document.visibilityState,
+        wasDiscarded: Boolean(document.wasDiscarded),
+        contentScriptVersion: CONTENT_SCRIPT_VERSION
+      });
       return false;
     }
 
@@ -38,6 +55,44 @@
     return false;
   });
 
+  function installMutationObserver() {
+    const observer = new MutationObserver((mutations) => {
+      const now = Date.now();
+      lastDomMutationAt = now;
+      if (mutations.some(isRelevantMutation)) lastRelevantMutationAt = now;
+      updateGenerationClock(now);
+    });
+    const root = document.documentElement || document;
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "aria-disabled", "data-testid", "data-message-author-role"]
+    });
+  }
+
+  function isRelevantMutation(mutation) {
+    const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
+    if (target?.closest?.(MESSAGE_SELECTOR)) return true;
+    if (target?.closest?.("#prompt-textarea, button[data-testid='stop-button'], button[data-testid='send-button']")) {
+      return true;
+    }
+    return [...(mutation.addedNodes || [])].some((node) => {
+      if (!(node instanceof Element)) return false;
+      return node.matches?.(MESSAGE_SELECTOR)
+        || Boolean(node.querySelector?.(MESSAGE_SELECTOR))
+        || Boolean(node.matches?.("button[data-testid='stop-button'], button[data-testid='send-button']"));
+    });
+  }
+
+  function updateGenerationClock(now = Date.now()) {
+    const generating = detectGenerating();
+    if (generating && generationStartedAt === null) generationStartedAt = now;
+    if (!generating) generationStartedAt = null;
+    return generating;
+  }
+
   function inspectPage() {
     const messages = getMessages();
     const latest = messages.at(-1) || null;
@@ -47,6 +102,9 @@
       || latest?.getAttribute?.("data-testid")
       || latest?.id
       || "";
+    const input = findInput();
+    const now = Date.now();
+    const generating = updateGenerationClock(now);
 
     const title = (document.title || "Чат ChatGPT")
       .replace(/\s*[-|]\s*ChatGPT\s*$/i, "")
@@ -59,11 +117,21 @@
       latestFingerprint: latest
         ? fnv1a(`${latestRole}|${latestId}|${latestText}`)
         : null,
-      isGenerating: isGenerating(),
+      isGenerating: generating,
+      generationAgeMs: generating && generationStartedAt !== null ? now - generationStartedAt : 0,
       errorDetected: hasPageError(),
       pageReady: document.readyState === "interactive" || document.readyState === "complete",
       authenticated: isAuthenticated(),
-      messageCount: messages.length
+      messageCount: messages.length,
+      hasComposer: Boolean(input),
+      hasDraft: Boolean(input && normalize(readInputValue(input))),
+      observedAt: new Date(now).toISOString(),
+      documentStartedAt: new Date(performance.timeOrigin || now).toISOString(),
+      lastDomMutationAt,
+      lastRelevantMutationAt,
+      visibilityState: document.visibilityState,
+      wasDiscarded: Boolean(document.wasDiscarded),
+      contentScriptVersion: CONTENT_SCRIPT_VERSION
     };
   }
 
@@ -71,10 +139,13 @@
     const normalizedCommand = normalize(command);
     if (!normalizedCommand) throw new Error("Команда продолжения пуста.");
     if (!isAuthenticated()) throw new Error("В профиле Chrome не выполнен вход в ChatGPT.");
-    if (isGenerating()) throw new Error("ChatGPT ещё создаёт ответ.");
+    if (updateGenerationClock()) throw new Error("ChatGPT ещё создаёт ответ.");
 
     const input = findInput();
     if (!input) throw new Error("Поле ввода ChatGPT не найдено.");
+    if (normalize(readInputValue(input))) {
+      throw new Error("Поле ввода содержит пользовательский черновик; автоматическая отправка отменена.");
+    }
 
     fillInput(input, command);
     const sendButton = await waitForSendButton(4_000);
@@ -133,7 +204,7 @@
     return (hash >>> 0).toString(16);
   }
 
-  function isGenerating() {
+  function detectGenerating() {
     if (document.querySelector("button[data-testid='stop-button']")) return true;
     return [...document.querySelectorAll("button")].some((button) => {
       const label = normalize(button.getAttribute("aria-label") || button.innerText).toLowerCase();
@@ -167,6 +238,13 @@
       if (candidate && isVisible(candidate)) return candidate;
     }
     return null;
+  }
+
+  function readInputValue(input) {
+    if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
+      return input.value;
+    }
+    return input.innerText || input.textContent || "";
   }
 
   function isVisible(element) {

@@ -27,8 +27,11 @@ final class SkinStatusMenuInstaller: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let menu = notification.object as? NSMenu else { return }
-            Task { @MainActor in
+            // `queue: .main` гарантирует синхронное выполнение на главном потоке.
+            // `assumeIsolated` сообщает это Swift 6 и не пересылает NSMenu между
+            // concurrency-доменами.
+            MainActor.assumeIsolated {
+                guard let menu = notification.object as? NSMenu else { return }
                 self?.installOrRefresh(in: menu)
             }
         }

@@ -13,7 +13,6 @@ public struct BrowserSnapshot: Codable, Equatable, Sendable {
     public let latestRole: MessageRole
     public let latestFingerprint: String?
     public let isGenerating: Bool
-    public let limitDetected: Bool
     public let errorDetected: Bool
     public let pageReady: Bool
 
@@ -23,7 +22,6 @@ public struct BrowserSnapshot: Codable, Equatable, Sendable {
         latestRole: MessageRole,
         latestFingerprint: String?,
         isGenerating: Bool,
-        limitDetected: Bool,
         errorDetected: Bool,
         pageReady: Bool = true
     ) {
@@ -32,7 +30,6 @@ public struct BrowserSnapshot: Codable, Equatable, Sendable {
         self.latestRole = latestRole
         self.latestFingerprint = latestFingerprint
         self.isGenerating = isGenerating
-        self.limitDetected = limitDetected
         self.errorDetected = errorDetected
         self.pageReady = pageReady
     }
@@ -98,7 +95,6 @@ public enum MonitorDecision: Equatable, Sendable {
     case sendContinuation
     case waitingForAssistant
     case generating
-    case technicalLimit
     case pageError
     case pageNotReady
     case noMessages

@@ -110,19 +110,28 @@ def main() -> int:
             ),
         ),
         (
-            "20 воспроизводимый публичный релиз без внешнего ИИ",
+            "20 воспроизводимый Universal 2 релиз без внешнего ИИ",
             bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
             and bool(re.fullmatch(r"[1-9]\d*", build_number))
             and "VERSION_FILE" in build_script
             and "BUILD_NUMBER_FILE" in build_script
+            and "arm64 x86_64" in build_script
+            and "SWIFT_ARCH_ARGS" in build_script
+            and "lipo -archs" in build_script
             and "--options runtime" in build_script
             and "swift test -c release" in workflow
             and "round: [1, 2, 3, 4, 5]" in workflow
+            and "lipo -archs" in workflow
+            and "grep -qw arm64" in workflow
+            and "grep -qw x86_64" in workflow
             and "Релизный preflight успешно завершён" in preflight
             and "workflow_run:" in release_workflow
             and "gh release create" in release_workflow
             and "shasum -a 256" in release_workflow
             and f"Текущая версия: **{version}**" in readme
+            and "Universal 2" in readme
+            and "arm64" in readme
+            and "x86_64" in readme
             and f"## [{version}]" in changelog
             and f"# ChatPulse {version}" in release_notes
             and 'bash "$BUILD_SCRIPT"' in installer

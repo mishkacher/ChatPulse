@@ -14,6 +14,20 @@ xcode-select --install
 swift --version
 ```
 
+## Чистая установка
+
+Скопируйте весь блок целиком в Terminal:
+
+```bash
+cd ~
+rm -rf "$HOME/ChatPulse-install"
+git clone --depth 1 https://github.com/mishkacher/ChatPulse.git "$HOME/ChatPulse-install"
+cd "$HOME/ChatPulse-install"
+bash scripts/install_app.sh
+```
+
+Не выполняйте `git clone` внутри уже открытой папки ChatPulse: это создаёт вложенные каталоги `ChatPulse/ChatPulse` и затрудняет обновление.
+
 ## Сборка
 
 ```bash
@@ -33,9 +47,11 @@ dist/ChatPulse.app
 - формируется bundle `ChatPulse.app`;
 - выполняется локальная ad-hoc подпись.
 
-## Установка
+## Повторная установка из уже скачанной папки
 
 ```bash
+cd "$HOME/ChatPulse-install"
+git pull --ff-only
 bash scripts/install_app.sh
 ```
 
@@ -46,6 +62,12 @@ bash scripts/install_app.sh
 3. устанавливает приложение в `/Applications`, если папка доступна для записи;
 4. иначе использует `~/Applications` без запроса прав администратора;
 5. запускает установленную копию.
+
+Для ручного запуска:
+
+```bash
+open "/Applications/ChatPulse.app" 2>/dev/null || open "$HOME/Applications/ChatPulse.app"
+```
 
 ## Первый вход
 
@@ -58,9 +80,19 @@ bash scripts/install_app.sh
 
 Никакие разрешения Automation для Chrome или Safari не требуются.
 
-## Вход через Google не открывается
+## Огромное белое окно при входе
 
-Google ограничивает OAuth во встроенных WebView. Используйте другой доступный способ входа в ChatGPT. ChatPulse не подменяет User-Agent и не пытается обходить это ограничение.
+Версия `0.2.1` исправляет обработку `window.open` и `about:blank`:
+
+- основное окно больше не заменяется пустой страницей;
+- дочерние окна ограничиваются видимой областью экрана;
+- закрытие всплывающего окна корректно освобождает его WebKit-контроллер.
+
+## Вход через Google
+
+Google запрещает OAuth во встроенных WebView. ChatPulse распознаёт переход к Google OAuth, отменяет его и показывает понятное русское сообщение вместо белого окна.
+
+Используйте другой способ входа, доступный на странице ChatGPT. Сессия, созданная отдельно в Safari, не переносится в хранилище cookies встроенного `WKWebView`.
 
 ## Чат открыт, но команда не отправляется
 

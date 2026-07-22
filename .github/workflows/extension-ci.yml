@@ -73,9 +73,12 @@ jobs:
             zip -r ../dist/ChatPulse-Chrome-v0.5.0-beta.zip . \
               -x "*.DS_Store" "*/.DS_Store"
           )
-          sha256sum dist/ChatPulse-Chrome-v0.5.0-beta.zip \
-            > dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
-          sha256sum -c dist/ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+          (
+            cd dist
+            sha256sum ChatPulse-Chrome-v0.5.0-beta.zip \
+              > ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+            sha256sum -c ChatPulse-Chrome-v0.5.0-beta.zip.sha256
+          )
 
       - name: Публикация beta-артефакта
         if: matrix.round == 5

@@ -17,6 +17,7 @@ def main() -> int:
     models = read("Sources/ChatPulseCore/Models.swift")
     engine = read("Sources/ChatPulseCore/DecisionEngine.swift")
     merger = read("Sources/ChatPulseCore/SettingsMerger.swift")
+    authentication = read("Sources/ChatPulseCore/AuthenticationURL.swift")
     webkit = read("Sources/ChatPulseApp/WebKitBrowserController.swift")
     browser_window = read("Sources/ChatPulseApp/BrowserWindowController.swift")
     app = read("Sources/ChatPulseApp/AppDelegate.swift")
@@ -24,6 +25,7 @@ def main() -> int:
     store = read("Sources/ChatPulseCore/SettingsStore.swift")
     package = read("Package.swift")
     installer = read("scripts/install_app.sh")
+    readme = read("README.md")
     workflow = read(".github/workflows/ci.yml") if (ROOT / ".github/workflows/ci.yml").exists() else ""
 
     checks: list[tuple[str, bool]] = [
@@ -56,12 +58,21 @@ def main() -> int:
             and "SettingsMerger.mergeRuntimeState" in coordinator
             and "lastObservedFingerprint" in merger,
         ),
-        ("18 встроенный WebKit без Chrome", "WKWebView" in webkit + browser_window and "Google Chrome" not in webkit + app),
+        (
+            "18 WebKit-попапы ограничены и Google OAuth перехвачен",
+            "WKWebView" in webkit + browser_window
+            and "Google Chrome" not in webkit + app
+            and "popupWindows" in browser_window
+            and "constrainedFrame" in browser_window
+            and "AuthenticationURL.isGoogleSignIn" in browser_window
+            and "accounts.google.com" in authentication,
+        ),
         (
             "19 CI и установка не зависят от executable-бита",
             "swift test" in workflow
             and "build_app.sh" in workflow
-            and 'bash "$BUILD_SCRIPT"' in installer,
+            and 'bash "$BUILD_SCRIPT"' in installer
+            and 'git clone --depth 1' in readme,
         ),
         ("20 нет внешнего ИИ или платного API", not re.search(r"Anthropic|Ollama|API_KEY", package, re.I)),
     ]

@@ -4,6 +4,7 @@
 [![Release](https://github.com/mishkacher/ChatPulse/actions/workflows/release.yml/badge.svg)](https://github.com/mishkacher/ChatPulse/actions/workflows/release.yml)
 [![GitHub release](https://img.shields.io/github/v/release/mishkacher/ChatPulse)](https://github.com/mishkacher/ChatPulse/releases/latest)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/mishkacher/ChatPulse)
+[![Universal 2](https://img.shields.io/badge/Universal_2-arm64%20%2B%20x86__64-blue)](https://github.com/mishkacher/ChatPulse/releases/latest)
 [![Swift 6](https://img.shields.io/badge/Swift-6-orange?logo=swift)](https://www.swift.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -20,6 +21,8 @@
 Текущая версия: **0.4.0** — первый публичный релиз.
 
 - macOS 13 Ventura и новее;
+- универсальный бинарник **Universal 2** для `arm64` и `x86_64`;
+- поддержка Mac с Apple Silicon и Intel;
 - Swift 6;
 - пять независимых полных CI-циклов на macOS 15 для каждого Pull Request;
 - автоматическая публикация ZIP и SHA-256 после успешной проверки основной ветки;
@@ -31,12 +34,14 @@
 2. Скачайте:
    - `ChatPulse-macOS-v0.4.0.zip`;
    - `ChatPulse-macOS-v0.4.0.zip.sha256`.
-3. При желании проверьте checksum:
+3. Проверьте checksum:
 
 ```bash
 cd "$HOME/Downloads"
 shasum -a 256 -c ChatPulse-macOS-v0.4.0.zip.sha256
 ```
+
+Ожидаемый результат заканчивается словом `OK`.
 
 4. Распакуйте ZIP.
 5. Переместите `ChatPulse.app` в `/Applications` или `~/Applications`.
@@ -46,16 +51,16 @@ shasum -a 256 -c ChatPulse-macOS-v0.4.0.zip.sha256
 
 Открытая сборка имеет корректную ad-hoc подпись и hardened runtime, но пока не подписана сертификатом Apple Developer ID и не нотарифицирована Apple. Поэтому macOS может потребовать ручное подтверждение первого запуска.
 
-Используйте один из стандартных способов:
+Используйте стандартный способ:
 
 - нажмите `ChatPulse.app` правой кнопкой мыши и выберите **Открыть**;
-- либо откройте **System Settings → Privacy & Security** и подтвердите запуск приложения.
+- либо откройте **System Settings → Privacy & Security** и подтвердите запуск.
 
 Не отключайте Gatekeeper целиком.
 
 ## Установка из исходников
 
-Для локальной сборки нужны Xcode Command Line Tools и Swift 6. Скопируйте блок целиком в Terminal:
+Для локальной сборки нужны Xcode Command Line Tools и Swift 6:
 
 ```bash
 cd ~
@@ -65,7 +70,7 @@ cd "$HOME/ChatPulse-install"
 bash scripts/install_app.sh
 ```
 
-Приложение устанавливается в `/Applications/ChatPulse.app`, а без прав записи — в `~/Applications/ChatPulse.app`.
+Скрипт собирает Universal 2 приложение и устанавливает его в `/Applications/ChatPulse.app`, а без прав записи — в `~/Applications/ChatPulse.app`.
 
 Для повторного запуска:
 
@@ -110,9 +115,8 @@ open "/Applications/ChatPulse.app" 2>/dev/null || open "$HOME/Applications/ChatP
 - добавление текущего разговора;
 - включение, открытие и удаление сохранённых чатов;
 - выбор скина;
+- окно **«О ChatPulse…»** с версией и номером сборки;
 - журнал последних действий.
-
-Встроенный браузер содержит кнопки навигации, адрес, способы входа, кнопку добавления чата, состояние авторизации и переключатель скина.
 
 ## Скины
 
@@ -190,7 +194,8 @@ make preflight
 - debug- и release-тесты;
 - 20 обязательных quality gates;
 - проверку shell-скриптов;
-- release-сборку приложения;
+- Universal 2 release-сборку;
+- обязательное наличие архитектур `arm64` и `x86_64`;
 - проверку `Info.plist`;
 - проверку версии и build number;
 - строгую проверку code signature, hardened runtime, bundle identifier и иконки.
@@ -215,6 +220,7 @@ CI выполняет этот набор в пяти независимых mac
 - [Релизный чек-лист](docs/RELEASE_CHECKLIST.md)
 - [20 раундов оптимизации и аудита](docs/OPTIMIZATION_AUDIT.md)
 - [История изменений](CHANGELOG.md)
+- [Поддержка](SUPPORT.md)
 - [Модель безопасности](SECURITY.md)
 - [Правила участия](CONTRIBUTING.md)
 

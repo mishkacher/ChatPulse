@@ -13,25 +13,25 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Получение исходников
         uses: actions/checkout@v4
 
-      - name: Show Swift version
+      - name: Версия Swift
         run: swift --version
 
-      - name: Run unit tests
+      - name: Модульные тесты
         run: swift test
 
-      - name: Run 20 quality gates
+      - name: 20 проверок качества
         run: python3 scripts/quality_gate.py
 
-      - name: Build macOS app
+      - name: Сборка приложения macOS
         run: bash scripts/build_app.sh
 
-      - name: Archive app
+      - name: Упаковка приложения
         run: ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app dist/ChatPulse-macOS.zip
 
-      - name: Upload unsigned app
+      - name: Публикация неподписанного приложения
         uses: actions/upload-artifact@v4
         with:
           name: ChatPulse-macOS

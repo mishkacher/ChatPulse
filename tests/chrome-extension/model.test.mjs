@@ -10,7 +10,7 @@ import {
   normalizeChatURL,
   normalizeState,
   recordDispatch
-} from "../../chrome-extension/lib/model.js";
+} from "../../chrome-extension/lib/model-v2.js";
 
 const snapshot = (overrides = {}) => ({
   title: "Тестовый чат",

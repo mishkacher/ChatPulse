@@ -1,39 +1,16 @@
-# История изменений
+# Changelog
 
-Все заметные изменения ChatPulse фиксируются в этом файле.
+## 0.5.0 beta — Chrome extension
 
-Формат основан на Keep a Changelog, версии следуют Semantic Versioning.
+- replaced the unsupported embedded WebKit login with the authenticated Google Chrome profile;
+- migrated to Manifest V3;
+- added background scheduling with `chrome.alarms`;
+- added selected-chat management and automatic tab recovery;
+- preserved baseline delay and at-most-once duplicate protection;
+- added macOS and ChatPulse Preview themes;
+- added local logs, settings and manual diagnostics;
+- limited permissions to `alarms`, `scripting`, `storage` and `tabs`;
+- added five-cycle CI, ZIP packaging and SHA-256 validation;
+- removed the native macOS/WebKit implementation from `main`.
 
-## [0.4.0] — 2026-07-22
-
-### Добавлено
-
-- первый публичный релиз приложения ChatPulse для macOS 13 и новее;
-- универсальный Universal 2 бинарник для `arm64` и `x86_64`;
-- поддержка Mac с Apple Silicon и Intel;
-- встроенный браузер на системном движке WebKit с постоянным хранилищем сессии;
-- добавление и управление несколькими чатами ChatGPT;
-- фоновая проверка выбранных разговоров по настраиваемому интервалу;
-- точная команда продолжения: `продолжай и не останавливайся до технического лимита`;
-- защита от немедленного повторного запуска после нового ответа;
-- at-most-once защита от повторной отправки одной команды для одного ответа;
-- вход по email / одноразовому коду и passkey через официальный интерфейс OpenAI;
-- два сохраняемых скина: системный macOS и ChatPulse Preview;
-- пять независимых полных циклов CI на macOS 15 для каждого Pull Request;
-- воспроизводимая release-сборка, ZIP-архив и SHA-256 checksum;
-- автоматическое создание GitHub Release после успешной CI-проверки основной ветки.
-
-### Безопасность
-
-- приложение не хранит пароли, email, одноразовые коды или passkey;
-- приложение не читает cookies Safari и не отправляет телеметрию;
-- внешние ИИ, платные API и обход технических лимитов не используются;
-- URL чатов ограничены официальными доменами ChatGPT;
-- release bundle использует hardened runtime и проверяемую code signature.
-
-### Известные ограничения
-
-- интерфейс ChatGPT может измениться и потребовать обновления DOM-селекторов;
-- Google OAuth не поддерживается внутри встроенного WebView;
-- текущая публичная сборка подписывается ad-hoc, а не Apple Developer ID, поэтому macOS может запросить ручное подтверждение первого запуска;
-- бесшовная установка без предупреждения Gatekeeper потребует сертификата Apple Developer ID и нотарификации Apple.
+The previous 0.4.0 source remains available only in `legacy/macos-webkit-v0.4.0` for historical reference.

@@ -84,7 +84,7 @@ def main() -> int:
             and "UserDefaults.standard.set" in skin_coordinator
             and "ChatPulse.ui.skin" in skin_coordinator
             and "NSPopUpButton" in skin_coordinator
-            and "NSMenu.didBeginTrackingNotification" in skin_status_menu
+            and "NSMenu.didAddItemNotification" in skin_status_menu
             and "SkinCoordinator.shared.select" in skin_status_menu
             and "Открыть браузер ChatPulse…" in skin_status_menu
             and all(color in skin_coordinator for color in [

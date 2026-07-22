@@ -21,6 +21,7 @@ def main() -> int:
     login_support = read("Sources/ChatPulseCore/LoginSupport.swift")
     app_skin = read("Sources/ChatPulseCore/AppSkin.swift")
     skin_coordinator = read("Sources/ChatPulseApp/SkinCoordinator.swift")
+    skin_status_menu = read("Sources/ChatPulseApp/SkinStatusMenuInstaller.swift")
     webkit = read("Sources/ChatPulseApp/WebKitBrowserController.swift")
     browser_window = read("Sources/ChatPulseApp/BrowserWindowController.swift")
     app = read("Sources/ChatPulseApp/AppDelegate.swift")
@@ -77,11 +78,15 @@ def main() -> int:
             and "isUserVerifyingPlatformAuthenticatorAvailable" in login_support,
         ),
         (
-            "19 два сохраняемых скина и пять независимых полных CI-циклов",
+            "19 два скина, два переключателя и пять независимых CI-циклов",
             "case macOS" in app_skin
             and "case chatPulsePreview" in app_skin
             and "UserDefaults.standard.set" in skin_coordinator
             and "ChatPulse.ui.skin" in skin_coordinator
+            and "NSPopUpButton" in skin_coordinator
+            and "NSMenu.didBeginTrackingNotification" in skin_status_menu
+            and "SkinCoordinator.shared.select" in skin_status_menu
+            and "Открыть браузер ChatPulse…" in skin_status_menu
             and all(color in skin_coordinator for color in [
                 "#071126", "#11183A", "#24123D", "#2C8CFF", "#9B5CFF"
             ])

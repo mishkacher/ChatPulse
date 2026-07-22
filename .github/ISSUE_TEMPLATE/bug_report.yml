@@ -1,0 +1,80 @@
+name: Сообщение об ошибке
+description: Сообщить о воспроизводимой проблеме ChatPulse
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за сообщение. Не прикладывайте cookies, приватные URL чатов, email, одноразовые коды, passkey или содержимое личной переписки.
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия ChatPulse
+      description: Укажите версию из GitHub Release или Info приложения.
+      placeholder: 0.4.0
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: Версия macOS и модель Mac
+      placeholder: macOS 15.x, Apple Silicon
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Способ установки
+      options:
+        - ZIP из GitHub Release
+        - Сборка из исходников
+        - Другое
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Что произошло
+      description: Опишите фактическое поведение без приватных данных.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть...
+        2. Нажать...
+        3. Увидеть...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Безопасный фрагмент журнала
+      description: Удалите названия приватных чатов, URL и любые данные аккаунта.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Проверки
+      options:
+        - label: Я использую последнюю опубликованную версию.
+          required: true
+        - label: Я удалил приватные URL, cookies, email, коды и содержимое переписки.
+          required: true

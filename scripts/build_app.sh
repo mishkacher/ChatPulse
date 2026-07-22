@@ -9,6 +9,8 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="ChatPulse"
 BUNDLE_ID="com.mishkacher.ChatPulse"
+VERSION_FILE="$ROOT_DIR/VERSION"
+BUILD_NUMBER_FILE="$ROOT_DIR/BUILD_NUMBER"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -18,15 +20,63 @@ ICON_SOURCE="$ROOT_DIR/Resources/ChatPulseIcon.svg"
 ICON_WORK_DIR="$DIST_DIR/.icon-work"
 ICON_PNG="$ICON_WORK_DIR/ChatPulseIcon-1024.png"
 ICONSET_DIR="$ICON_WORK_DIR/ChatPulse.iconset"
+SIGN_IDENTITY="${CHATPULSE_CODESIGN_IDENTITY:--}"
+ARCHITECTURE_LIST="${CHATPULSE_ARCHITECTURES:-arm64 x86_64}"
+
+read_trimmed() {
+  tr -d '[:space:]' < "$1"
+}
+
+[[ -f "$VERSION_FILE" ]] || { echo "Не найден VERSION" >&2; exit 1; }
+[[ -f "$BUILD_NUMBER_FILE" ]] || { echo "Не найден BUILD_NUMBER" >&2; exit 1; }
+
+APP_VERSION="$(read_trimmed "$VERSION_FILE")"
+BUILD_NUMBER="$(read_trimmed "$BUILD_NUMBER_FILE")"
+
+[[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Некорректная версия приложения: $APP_VERSION" >&2
+  exit 1
+}
+[[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
+  echo "Некорректный номер сборки: $BUILD_NUMBER" >&2
+  exit 1
+}
+
+read -r -a ARCHITECTURES <<< "$ARCHITECTURE_LIST"
+[[ ${#ARCHITECTURES[@]} -gt 0 ]] || {
+  echo "Не указаны архитектуры сборки" >&2
+  exit 1
+}
+
+SWIFT_ARCH_ARGS=()
+for architecture in "${ARCHITECTURES[@]}"; do
+  case "$architecture" in
+    arm64|x86_64)
+      SWIFT_ARCH_ARGS+=(--arch "$architecture")
+      ;;
+    *)
+      echo "Неподдерживаемая архитектура: $architecture" >&2
+      exit 1
+      ;;
+  esac
+done
 
 cd "$ROOT_DIR"
 rm -rf "$APP_DIR" "$ICON_WORK_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$ICONSET_DIR"
 
-swift build -c release
-BIN_DIR="$(swift build -c release --show-bin-path)"
+swift build -c release "${SWIFT_ARCH_ARGS[@]}"
+BIN_DIR="$(swift build -c release "${SWIFT_ARCH_ARGS[@]}" --show-bin-path)"
 cp "$BIN_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
+
+ACTUAL_ARCHITECTURES="$(lipo -archs "$MACOS_DIR/$APP_NAME")"
+for architecture in "${ARCHITECTURES[@]}"; do
+  grep -qw "$architecture" <<< "$ACTUAL_ARCHITECTURES" || {
+    echo "В бинарнике отсутствует архитектура $architecture: $ACTUAL_ARCHITECTURES" >&2
+    exit 1
+  }
+done
 
 if [[ -f "$ICON_SOURCE" ]]; then
   # AppKit сохраняет векторный SVG в исходный PNG 1024×1024,
@@ -110,20 +160,38 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.4.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>5</string>
+  <string>$BUILD_NUMBER</string>
+  <key>CFBundleGetInfoString</key>
+  <string>ChatPulse $APP_VERSION</string>
   <key>CFBundleIconFile</key>
   <string>ChatPulse</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
+  <key>LSMultipleInstancesProhibited</key>
+  <true/>
   <key>LSUIElement</key>
   <true/>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © 2026 mishkacher. MIT License.</string>
 </dict>
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP_DIR"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  codesign --force --deep --options runtime --timestamp=none --sign - "$APP_DIR"
+else
+  codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_DIR"
+fi
+
+codesign --verify --deep --strict "$APP_DIR"
 rm -rf "$ICON_WORK_DIR"
 
 echo "Собрано: $APP_DIR"
+echo "Версия: $APP_VERSION (build $BUILD_NUMBER)"
+echo "Архитектуры: $ACTUAL_ARCHITECTURES"

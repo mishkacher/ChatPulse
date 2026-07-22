@@ -1,9 +1,12 @@
-.PHONY: test audit build install
+.PHONY: test test-release audit build install preflight clean
 
 test:
 	swift test
 
-audit: test
+test-release:
+	swift test -c release
+
+audit: test test-release
 	python3 scripts/quality_gate.py
 
 build:
@@ -11,3 +14,9 @@ build:
 
 install:
 	bash scripts/install_app.sh
+
+preflight:
+	bash scripts/release_preflight.sh
+
+clean:
+	rm -rf .build dist

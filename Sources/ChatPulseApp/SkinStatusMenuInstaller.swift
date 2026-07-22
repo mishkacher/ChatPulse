@@ -2,17 +2,17 @@
 import AppKit
 import ChatPulseCore
 
-/// Добавляет выбор скина прямо в меню значка ChatPulse в строке состояния.
+/// Добавляет выбор скина и сведения о версии прямо в меню значка ChatPulse.
 ///
 /// Меню строки состояния создаётся `AppDelegate`, поэтому установщик следит
 /// за публичным уведомлением AppKit о добавлении пунктов. После завершения
-/// построения меню он добавляет пункт только в однозначно распознанное меню
-/// ChatPulse и не затрагивает другие меню приложений.
+/// построения меню он изменяет только однозначно распознанное меню ChatPulse.
 @MainActor
 final class SkinStatusMenuInstaller: NSObject {
     static let shared = SkinStatusMenuInstaller()
 
-    private let parentIdentifier = NSUserInterfaceItemIdentifier("chatpulse.status.skin")
+    private let skinIdentifier = NSUserInterfaceItemIdentifier("chatpulse.status.skin")
+    private let aboutIdentifier = NSUserInterfaceItemIdentifier("chatpulse.status.about")
     private var isStarted = false
 
     private override init() {
@@ -41,13 +41,17 @@ final class SkinStatusMenuInstaller: NSObject {
 
     private func installOrRefresh(in menu: NSMenu) {
         guard isChatPulseStatusMenu(menu) else { return }
+        installSkinItem(in: menu)
+        installAboutItem(in: menu)
+    }
 
+    private func installSkinItem(in menu: NSMenu) {
         let parent: NSMenuItem
-        if let existing = menu.items.first(where: { $0.identifier == parentIdentifier }) {
+        if let existing = menu.items.first(where: { $0.identifier == skinIdentifier }) {
             parent = existing
         } else {
             parent = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-            parent.identifier = parentIdentifier
+            parent.identifier = skinIdentifier
 
             let insertionIndex = menu.items.firstIndex(where: {
                 $0.title == "Открыть браузер ChatPulse…"
@@ -57,6 +61,25 @@ final class SkinStatusMenuInstaller: NSObject {
 
         parent.title = "Скин: \(SkinCoordinator.shared.activeSkin.displayName)"
         parent.submenu = buildSkinSubmenu()
+    }
+
+    private func installAboutItem(in menu: NSMenu) {
+        guard menu.items.first(where: { $0.identifier == aboutIdentifier }) == nil else {
+            return
+        }
+
+        let about = NSMenuItem(
+            title: "О ChatPulse…",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        about.identifier = aboutIdentifier
+        about.target = self
+
+        let insertionIndex = menu.items.firstIndex(where: {
+            $0.title == "Выйти из ChatPulse"
+        }) ?? menu.items.count
+        menu.insertItem(about, at: insertionIndex)
     }
 
     private func isChatPulseStatusMenu(_ menu: NSMenu) -> Bool {
@@ -95,10 +118,28 @@ final class SkinStatusMenuInstaller: NSObject {
 
         if let statusMenu = sender.menu?.supermenu,
            let statusParent = statusMenu.items.first(where: {
-               $0.identifier == parentIdentifier
+               $0.identifier == skinIdentifier
            }) {
             statusParent.title = "Скин: \(skin.displayName)"
             statusParent.submenu = buildSkinSubmenu()
+        }
+    }
+
+    @objc private func showAbout() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "неизвестно"
+        let build = info["CFBundleVersion"] as? String ?? "неизвестно"
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "ChatPulse \(version)"
+        alert.informativeText = "Build \(build)\n\nНативная утилита строки меню macOS для мониторинга выбранных разговоров ChatGPT. Настройки хранятся локально; телеметрия, внешний ИИ и платные API не используются.\n\nMIT License."
+        alert.addButton(withTitle: "Понятно")
+        alert.addButton(withTitle: "Открыть Releases")
+
+        if alert.runModal() == .alertSecondButtonReturn,
+           let url = URL(string: "https://github.com/mishkacher/ChatPulse/releases/latest") {
+            NSWorkspace.shared.open(url)
         }
     }
 }

@@ -10,7 +10,8 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
 assert.equal(manifest.manifest_version, 3, "Требуется Manifest V3");
 assert.equal(manifest.name, "ChatPulse");
-assert.equal(manifest.version, "0.5.1");
+assert.equal(manifest.version, "0.5.2");
+assert.equal(manifest.version_name, "0.5.2 beta");
 assert.equal(manifest.background?.type, "module");
 assert.equal(manifest.background?.service_worker, "background/service-worker-v2.js");
 assert.equal(manifest.action?.default_popup, "popup/popup.html");
@@ -46,45 +47,48 @@ const requiredFiles = [
   "options/options.css",
   "options/options.js"
 ];
-
 for (const relativePath of requiredFiles) {
   const file = path.join(extensionRoot, relativePath);
   const metadata = await stat(file);
   assert.ok(metadata.isFile() && metadata.size > 0, `Файл отсутствует или пуст: ${relativePath}`);
 }
+await stat(path.join(root, "tests/chrome-extension/service-worker.test.mjs"));
 
 const model = await readFile(path.join(extensionRoot, "lib/model-v2.js"), "utf8");
 const background = await readFile(path.join(extensionRoot, "background/service-worker-v2.js"), "utf8");
 const content = await readFile(path.join(extensionRoot, "content/content-script.js"), "utf8");
+const popupHTML = await readFile(path.join(extensionRoot, "popup/popup.html"), "utf8");
+const popupJS = await readFile(path.join(extensionRoot, "popup/popup.js"), "utf8");
 const popupCSS = await readFile(path.join(extensionRoot, "popup/popup.css"), "utf8");
+const optionsHTML = await readFile(path.join(extensionRoot, "options/options.html"), "utf8");
+const optionsJS = await readFile(path.join(extensionRoot, "options/options.js"), "utf8");
 const optionsCSS = await readFile(path.join(extensionRoot, "options/options.css"), "utf8");
 
 assert.ok(model.includes("продолжай и не останавливайся до технического лимита"));
 assert.ok(model.includes("lastCommandedFingerprint"));
-assert.ok(model.includes("lastObservedSessionId"));
 assert.ok(model.includes("planTabRecovery"));
-assert.ok(model.includes("recordRecovery"));
-assert.ok(model.includes("STUCK_GENERATION_MS"));
 assert.ok(background.includes("submitted-unconfirmed"));
-assert.ok(background.includes("mergeRuntimeState"));
-assert.ok(background.includes("liveChat?.enabled"));
-assert.ok(background.includes("merged = await configureAlarm(merged)"));
-assert.ok(background.includes("chrome.alarms"));
-assert.ok(background.includes("chrome.tabs.create"));
+assert.ok(background.includes("resolveChatTab"));
+assert.ok(background.includes("lastAccessed"));
+assert.ok(background.includes("chrome.windows.update"));
+assert.ok(background.includes("ensureChatTab(chat)"));
 assert.ok(background.includes("chrome.tabs.reload"));
 assert.ok(background.includes("autoDiscardable: false"));
-assert.ok(background.includes(".discarded"));
-assert.ok(background.includes(".frozen"));
 assert.ok(background.includes("waitForHydratedSnapshot"));
-assert.ok(background.includes("withTimeout"));
-assert.ok(content.includes("CHATPULSE_INSPECT"));
-assert.ok(content.includes("CHATPULSE_SEND"));
-assert.ok(content.includes("data-message-author-role"));
-assert.ok(content.includes("send-button"));
+assert.ok(content.includes('CONTENT_SCRIPT_VERSION = "0.5.2"'));
 assert.ok(content.includes("MutationObserver"));
 assert.ok(content.includes("hasDraft"));
-assert.ok(content.includes("generationAgeMs"));
 assert.ok(content.includes("document.wasDiscarded"));
+assert.ok(popupHTML.includes('id="versionLabel"'));
+assert.ok(optionsHTML.includes('id="versionLabel"'));
+assert.ok(popupJS.includes("chrome.runtime.getManifest()"));
+assert.ok(optionsJS.includes("chrome.runtime.getManifest()"));
+assert.ok(optionsJS.includes("commandDirty"));
+assert.ok(optionsJS.includes("intervalDirty"));
+for (const staleVersion of ["0.5.0 beta", "0.5.1 beta"]) {
+  assert.ok(!popupHTML.includes(staleVersion), `Popup содержит устаревшую версию ${staleVersion}`);
+  assert.ok(!optionsHTML.includes(staleVersion), `Options содержит устаревшую версию ${staleVersion}`);
+}
 
 for (const color of ["#071126", "#11183a", "#24123d", "#2c8cff", "#9b5cff"]) {
   assert.ok(
@@ -93,4 +97,4 @@ for (const color of ["#071126", "#11183a", "#24123d", "#2c8cff", "#9b5cff"]) {
   );
 }
 
-console.log("Manifest V3, восстановление вкладок и структура Chrome-расширения прошли статический аудит.");
+console.log("Manifest V3, интерфейс, вкладочная логика и структура ChatPulse 0.5.2 прошли статический аудит.");

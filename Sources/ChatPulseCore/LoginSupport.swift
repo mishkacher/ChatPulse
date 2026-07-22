@@ -88,6 +88,22 @@ public enum LoginSupport {
     })()
     """#
 
+    public static let authenticatedStateJavaScript = #"""
+    (() => {
+      const hasPrompt = Boolean(
+        document.querySelector('#prompt-textarea') ||
+        document.querySelector('textarea[placeholder]') ||
+        document.querySelector('[contenteditable="true"][data-virtualkeyboard]')
+      );
+      const hasConversationUI = Boolean(
+        document.querySelector('[data-testid="profile-button"]') ||
+        document.querySelector('nav a[href^="/c/"]') ||
+        document.querySelector('a[href^="/c/"]')
+      );
+      return hasPrompt || hasConversationUI ? 'authenticated' : 'not-authenticated';
+    })()
+    """#
+
     public static func isLikelySuccessfulLoginURL(_ url: URL?) -> Bool {
         guard let url,
               let host = url.host?.lowercased(),

@@ -91,7 +91,7 @@ async function handleMessage(message) {
       return { state: await loadState() };
 
     case "ADD_CURRENT_CHAT":
-      return { state: await addCurrentChat() };
+      return { state: await addCurrentChat(message.tabId) };
 
     case "REMOVE_CHAT":
       return { state: await mutateChat(message.chatId, (state, index) => {
@@ -114,9 +114,17 @@ async function handleMessage(message) {
       const state = await loadState();
       const chat = state.chats.find((candidate) => candidate.id === message.chatId);
       if (!chat) throw new Error("Чат не найден.");
-      const tab = await chrome.tabs.create({ url: chat.url, active: true });
-      chat.tabId = tab.id ?? null;
-      if (Number.isInteger(tab.id)) await protectManagedTab(tab.id);
+      const tab = await ensureChatTab(chat);
+      if (!Number.isInteger(tab.id)) throw new Error("Chrome не вернул идентификатор вкладки.");
+      const opened = await chrome.tabs.update(tab.id, { active: true });
+      chat.tabId = tab.id;
+      try {
+        if (Number.isInteger(opened?.windowId ?? tab.windowId)) {
+          await chrome.windows.update(opened?.windowId ?? tab.windowId, { focused: true });
+        }
+      } catch {
+        // Активация вкладки уже выполнена; фокус окна является необязательным улучшением.
+      }
       await persistAndPublish(state);
       return { state };
     }
@@ -135,11 +143,11 @@ async function handleMessage(message) {
   }
 }
 
-async function addCurrentChat() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const normalizedURL = normalizeChatURL(tab?.url);
-  if (!tab?.id || !normalizedURL) {
-    throw new Error("Откройте конкретный чат ChatGPT в активной вкладке Chrome.");
+async function addCurrentChat(preferredTabId = null) {
+  const tab = await resolveChatTab(preferredTabId);
+  const normalizedURL = normalizeChatURL(tab.url);
+  if (!Number.isInteger(tab.id) || !normalizedURL) {
+    throw new Error("Откройте хотя бы один конкретный чат ChatGPT в Chrome.");
   }
 
   await protectManagedTab(tab.id);
@@ -170,6 +178,35 @@ async function addCurrentChat() {
 
   await persistAndPublish(state);
   return state;
+}
+
+async function resolveChatTab(preferredTabId = null) {
+  if (Number.isInteger(preferredTabId)) {
+    try {
+      const preferred = await chrome.tabs.get(preferredTabId);
+      if (normalizeChatURL(preferred.url)) return preferred;
+    } catch {
+      // Переданная вкладка могла быть закрыта до обработки команды.
+    }
+  }
+
+  const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (Number.isInteger(active?.id) && normalizeChatURL(active.url)) return active;
+
+  const candidates = (await chrome.tabs.query({ url: CHATGPT_PATTERNS }))
+    .filter((candidate) => Number.isInteger(candidate.id) && normalizeChatURL(candidate.url))
+    .sort((left, right) => {
+      const activeDifference = Number(right.active === true) - Number(left.active === true);
+      if (activeDifference) return activeDifference;
+      const accessedDifference = Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
+      if (accessedDifference) return accessedDifference;
+      return Number(right.id || 0) - Number(left.id || 0);
+    });
+
+  if (!candidates.length) {
+    throw new Error("Откройте конкретный чат ChatGPT, затем повторите добавление.");
+  }
+  return candidates[0];
 }
 
 async function updateSettings(patch) {

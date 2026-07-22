@@ -2,7 +2,7 @@
   if (globalThis.__chatPulseContentScriptInstalled) return;
   globalThis.__chatPulseContentScriptInstalled = true;
 
-  const CONTENT_SCRIPT_VERSION = "0.5.1";
+  const CONTENT_SCRIPT_VERSION = "0.5.2";
   const MESSAGE_SELECTOR = "[data-message-author-role], article[data-testid^='conversation-turn-']";
   const INPUT_SELECTORS = [
     "#prompt-textarea",

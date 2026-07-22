@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatPulse</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body data-theme="macos">
+  <main class="shell">
+    <header class="header">
+      <img class="logo" src="../assets/logo.svg" alt="">
+      <div>
+        <h1>ChatPulse</h1>
+        <p id="statusText">Загрузка состояния…</p>
+      </div>
+      <button id="themeButton" class="icon-button" type="button" title="Сменить скин">◐</button>
+    </header>
+
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow">Наблюдение</span>
+        <strong id="monitorState">Остановлено</strong>
+      </div>
+      <button id="toggleButton" class="primary-button" type="button">Запустить</button>
+    </section>
+
+    <section class="controls-grid">
+      <button id="addChatButton" class="secondary-button" type="button">Добавить текущий чат</button>
+      <button id="checkButton" class="secondary-button" type="button">Проверить сейчас</button>
+    </section>
+
+    <section class="settings-row">
+      <label for="intervalSelect">Интервал</label>
+      <select id="intervalSelect">
+        <option value="0.5">30 секунд</option>
+        <option value="1">1 минута</option>
+        <option value="2">2 минуты</option>
+        <option value="5">5 минут</option>
+        <option value="10">10 минут</option>
+        <option value="15">15 минут</option>
+        <option value="30">30 минут</option>
+      </select>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>Чаты</h2>
+        <span id="chatCount">0</span>
+      </div>
+      <div id="chatList" class="chat-list"></div>
+    </section>
+
+    <section class="section log-section">
+      <div class="section-title">
+        <h2>Последнее действие</h2>
+      </div>
+      <p id="lastLog" class="last-log">Действий пока нет.</p>
+    </section>
+
+    <footer>
+      <button id="openOptionsButton" class="text-button" type="button">Открыть полный интерфейс</button>
+      <span>0.5.0 beta</span>
+    </footer>
+  </main>
+
+  <template id="chatTemplate">
+    <article class="chat-card">
+      <button class="chat-main" type="button">
+        <span class="chat-dot"></span>
+        <span class="chat-copy">
+          <strong class="chat-title"></strong>
+          <small class="chat-status"></small>
+        </span>
+      </button>
+      <button class="chat-toggle" type="button" title="Включить или отключить чат"></button>
+      <button class="chat-remove" type="button" title="Удалить чат">×</button>
+    </article>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

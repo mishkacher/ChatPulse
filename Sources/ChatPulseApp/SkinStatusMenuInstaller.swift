@@ -4,9 +4,10 @@ import ChatPulseCore
 
 /// Добавляет выбор скина прямо в меню значка ChatPulse в строке состояния.
 ///
-/// Меню строки состояния создаётся `AppDelegate`, поэтому установщик
-/// подключается к стандартному уведомлению AppKit о начале отслеживания меню.
-/// Он изменяет только меню, которое однозначно распознано как меню ChatPulse.
+/// Меню строки состояния создаётся `AppDelegate`, поэтому установщик следит
+/// за публичным уведомлением AppKit о добавлении пунктов. После завершения
+/// построения меню он добавляет пункт только в однозначно распознанное меню
+/// ChatPulse и не затрагивает другие меню приложений.
 @MainActor
 final class SkinStatusMenuInstaller: NSObject {
     static let shared = SkinStatusMenuInstaller()
@@ -22,7 +23,7 @@ final class SkinStatusMenuInstaller: NSObject {
         guard observer == nil else { return }
 
         observer = NotificationCenter.default.addObserver(
-            forName: NSMenu.didBeginTrackingNotification,
+            forName: NSMenu.didAddItemNotification,
             object: nil,
             queue: .main
         ) { [weak self] notification in

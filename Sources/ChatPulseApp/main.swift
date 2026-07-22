@@ -8,5 +8,5 @@ application.run()
 #else
 import Foundation
 
-print("ChatPulse is a macOS menu bar application. Build it on macOS 13 or newer.")
+print("ChatPulse — приложение строки меню для macOS. Соберите его на macOS 13 или новее.")
 #endif

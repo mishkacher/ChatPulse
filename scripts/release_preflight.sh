@@ -49,13 +49,16 @@ swift test -c release
 echo "[4/8] Quality gates"
 python3 scripts/quality_gate.py
 
-echo "[5/8] Сборка приложения"
+echo "[5/8] Универсальная сборка приложения"
 bash scripts/build_app.sh
 
-echo "[6/8] Проверка структуры bundle"
+echo "[6/8] Проверка структуры и архитектур bundle"
 test -x "$EXECUTABLE"
 test -f "$ICON"
 plutil -lint "$PLIST"
+ARCHITECTURES="$(lipo -archs "$EXECUTABLE")"
+grep -qw arm64 <<< "$ARCHITECTURES"
+grep -qw x86_64 <<< "$ARCHITECTURES"
 
 echo "[7/8] Проверка метаданных и подписи"
 ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
@@ -93,6 +96,8 @@ fi
 grep -q "## \[$VERSION\]" CHANGELOG.md
 grep -q "# ChatPulse $VERSION" RELEASE_NOTES.md
 grep -q "продолжай и не останавливайся до технического лимита" Sources/ChatPulseCore/Models.swift
+grep -q "arm64" README.md
+grep -q "x86_64" README.md
 
 echo
-echo "Релизный preflight успешно завершён: ChatPulse $VERSION (build $BUILD_NUMBER)"
+echo "Релизный preflight успешно завершён: ChatPulse $VERSION (build $BUILD_NUMBER), архитектуры: $ARCHITECTURES"

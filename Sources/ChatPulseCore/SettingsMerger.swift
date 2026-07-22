@@ -25,6 +25,7 @@ public enum SettingsMerger {
             merged.chats[index].lastCommandedFingerprint = observed.lastCommandedFingerprint
             merged.chats[index].lastObservedAt = observed.lastObservedAt
             merged.chats[index].lastCommandAt = observed.lastCommandAt
+            merged.chats[index].lastCommandOutcome = observed.lastCommandOutcome
         }
 
         return merged

@@ -2,6 +2,9 @@ export const DEFAULT_COMMAND = "продолжай и не останавлив�
 export const MIN_INTERVAL_MINUTES = 0.5;
 export const MAX_INTERVAL_MINUTES = 1_440;
 export const MAX_LOG_ENTRIES = 300;
+export const MIN_REFRESH_INTERVAL_MS = 5 * 60_000;
+export const MAX_REFRESH_INTERVAL_MS = 15 * 60_000;
+export const STUCK_GENERATION_MS = 20 * 60_000;
 
 export function createSessionId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -12,6 +15,11 @@ export function clampInterval(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 5;
   return Math.min(Math.max(parsed, MIN_INTERVAL_MINUTES), MAX_INTERVAL_MINUTES);
+}
+
+export function refreshIntervalMs(intervalMinutes) {
+  const requested = clampInterval(intervalMinutes) * 3 * 60_000;
+  return Math.min(MAX_REFRESH_INTERVAL_MS, Math.max(MIN_REFRESH_INTERVAL_MS, requested));
 }
 
 export function normalizeChatURL(rawValue) {
@@ -28,7 +36,7 @@ export function normalizeChatURL(rawValue) {
   }
 }
 
-export function createChat({ title, url, tabId = null }) {
+export function createChat({ title, url, tabId = null, now = new Date().toISOString() }) {
   const normalizedURL = normalizeChatURL(url);
   if (!normalizedURL) throw new Error("Открыта не страница конкретного чата ChatGPT.");
   return {
@@ -43,6 +51,11 @@ export function createChat({ title, url, tabId = null }) {
     lastCommandAt: null,
     lastDispatchOutcome: null,
     lastObservedSessionId: null,
+    lastSnapshotAt: null,
+    lastHardRefreshAt: now,
+    lastRecoveryAt: null,
+    lastRecoveryReason: null,
+    staleRecoveries: 0,
     lastError: null
   };
 }
@@ -62,13 +75,18 @@ export function normalizeChat(raw) {
     lastCommandAt: stringOrNull(raw.lastCommandAt),
     lastDispatchOutcome: stringOrNull(raw.lastDispatchOutcome),
     lastObservedSessionId: stringOrNull(raw.lastObservedSessionId),
+    lastSnapshotAt: stringOrNull(raw.lastSnapshotAt),
+    lastHardRefreshAt: stringOrNull(raw.lastHardRefreshAt),
+    lastRecoveryAt: stringOrNull(raw.lastRecoveryAt),
+    lastRecoveryReason: stringOrNull(raw.lastRecoveryReason),
+    staleRecoveries: nonNegativeInteger(raw.staleRecoveries),
     lastError: stringOrNull(raw.lastError)
   };
 }
 
 export function defaultState() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     enabled: false,
     checkInProgress: false,
     intervalMinutes: 5,
@@ -85,7 +103,7 @@ export function defaultState() {
 export function normalizeState(raw) {
   const fallback = defaultState();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     enabled: raw?.enabled === true,
     checkInProgress: raw?.checkInProgress === true,
     intervalMinutes: clampInterval(raw?.intervalMinutes ?? fallback.intervalMinutes),
@@ -117,7 +135,13 @@ export function appendLog(state, level, message, details = null) {
 }
 
 export function decide(chat, snapshot, sessionId) {
-  const updated = { ...chat, lastObservedAt: new Date().toISOString(), lastError: null };
+  const observedAt = stringOrNull(snapshot?.observedAt) || new Date().toISOString();
+  const updated = {
+    ...chat,
+    lastObservedAt: new Date().toISOString(),
+    lastSnapshotAt: observedAt,
+    lastError: null
+  };
   if (!chat.enabled) return { chat: updated, decision: "disabled" };
   if (!snapshot?.pageReady) return { chat: updated, decision: "page-not-ready" };
   if (!snapshot?.authenticated) return { chat: updated, decision: "not-authenticated" };
@@ -145,6 +169,40 @@ export function decide(chat, snapshot, sessionId) {
     return { chat: updated, decision: "already-continued" };
   }
   return { chat: updated, decision: "send-continuation", fingerprint };
+}
+
+export function planTabRecovery({ tab, snapshot, chat, intervalMinutes, now = Date.now() }) {
+  if (!tab || !Number.isInteger(tab.id)) return { refresh: true, reason: "missing-tab" };
+  if (tab.discarded === true) return { refresh: true, reason: "discarded-tab" };
+  if (tab.frozen === true) return { refresh: true, reason: "frozen-tab" };
+  if (!snapshot) return { refresh: true, reason: "content-unreachable" };
+  if (snapshot.errorDetected) return { refresh: true, reason: "page-error" };
+
+  const active = tab.active === true;
+  const hasDraft = snapshot.hasDraft === true;
+  const generationAgeMs = finiteNonNegative(snapshot.generationAgeMs);
+  if (!active && !hasDraft && snapshot.isGenerating && generationAgeMs >= STUCK_GENERATION_MS) {
+    return { refresh: true, reason: "stuck-generation" };
+  }
+  if (active || hasDraft || snapshot.isGenerating) return { refresh: false, reason: null };
+
+  const lastRefreshMs = timestampOrZero(chat?.lastHardRefreshAt);
+  const elapsedMs = Math.max(0, now - lastRefreshMs);
+  if (elapsedMs >= refreshIntervalMs(intervalMinutes)) {
+    return { refresh: true, reason: "periodic-freshness" };
+  }
+  return { refresh: false, reason: null };
+}
+
+export function recordRecovery(chat, reason, at = new Date().toISOString()) {
+  return {
+    ...chat,
+    lastHardRefreshAt: at,
+    lastRecoveryAt: at,
+    lastRecoveryReason: String(reason || "unknown"),
+    staleRecoveries: nonNegativeInteger(chat?.staleRecoveries) + 1,
+    lastError: null
+  };
 }
 
 export function recordDispatch(chat, fingerprint, outcome) {
@@ -176,6 +234,11 @@ export function mergeRuntimeState(observedState, latestState) {
         lastCommandAt: observed.lastCommandAt,
         lastDispatchOutcome: observed.lastDispatchOutcome,
         lastObservedSessionId: observed.lastObservedSessionId,
+        lastSnapshotAt: observed.lastSnapshotAt,
+        lastHardRefreshAt: observed.lastHardRefreshAt,
+        lastRecoveryAt: observed.lastRecoveryAt,
+        lastRecoveryReason: observed.lastRecoveryReason,
+        staleRecoveries: observed.staleRecoveries,
         lastError: observed.lastError
       };
     })
@@ -194,6 +257,21 @@ function mergeLogs(latestLogs, observedLogs) {
   return [...byId.values()]
     .sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")))
     .slice(-MAX_LOG_ENTRIES);
+}
+
+function timestampOrZero(value) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function finiteNonNegative(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function nonNegativeInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function stringOrNull(value) {

@@ -2,7 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-"$ROOT_DIR/scripts/build_app.sh"
+BUILD_SCRIPT="$ROOT_DIR/scripts/build_app.sh"
+
+if [[ ! -f "$BUILD_SCRIPT" ]]; then
+  echo "Не найден сборочный скрипт: $BUILD_SCRIPT" >&2
+  exit 1
+fi
+
+# Запускаем через bash, поэтому установка не зависит от executable-бита,
+# с которым файл был получен из ZIP или GitHub.
+bash "$BUILD_SCRIPT"
 
 SOURCE_APP="$ROOT_DIR/dist/ChatPulse.app"
 SYSTEM_APPLICATIONS="/Applications"

@@ -12,7 +12,7 @@ jobs:
   test-and-build:
     name: Полный цикл ${{ matrix.round }}/5
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +68,7 @@ jobs:
       - name: 20 проверок качества — цикл ${{ matrix.round }}
         run: python3 scripts/quality_gate.py
 
-      - name: Сборка приложения macOS — цикл ${{ matrix.round }}
+      - name: Сборка универсального приложения macOS — цикл ${{ matrix.round }}
         run: bash scripts/build_app.sh
 
       - name: Проверка bundle — цикл ${{ matrix.round }}
@@ -76,14 +76,18 @@ jobs:
         run: |
           set -euo pipefail
           APP="dist/ChatPulse.app"
+          EXECUTABLE="$APP/Contents/MacOS/ChatPulse"
           PLIST="$APP/Contents/Info.plist"
-          test -x "$APP/Contents/MacOS/ChatPulse"
+          test -x "$EXECUTABLE"
           test -f "$APP/Contents/Resources/ChatPulse.icns"
           plutil -lint "$PLIST"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$APP_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = "$BUILD_NUMBER"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "com.mishkacher.ChatPulse"
           test "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$PLIST")" = "true"
+          ARCHS="$(lipo -archs "$EXECUTABLE")"
+          grep -qw arm64 <<< "$ARCHS"
+          grep -qw x86_64 <<< "$ARCHS"
           codesign --verify --deep --strict "$APP"
           codesign -dvv "$APP" 2>&1 | grep -q 'Identifier=com.mishkacher.ChatPulse'
           codesign -dvv "$APP" 2>&1 | grep -q 'runtime'
@@ -96,6 +100,7 @@ jobs:
           ARCHIVE="dist/ChatPulse-macOS-v${APP_VERSION}.zip"
           ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app "$ARCHIVE"
           (cd dist && shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
+          shasum -a 256 -c "dist/$(basename "$ARCHIVE").sha256"
 
       - name: Публикация проверенного приложения
         if: matrix.round == 5

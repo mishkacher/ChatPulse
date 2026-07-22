@@ -14,49 +14,46 @@ def read(path: str) -> str:
 
 
 def main() -> int:
-    checks: list[tuple[str, bool]] = []
-
     models = read("Sources/ChatPulseCore/Models.swift")
     engine = read("Sources/ChatPulseCore/DecisionEngine.swift")
-    chrome = read("Sources/ChatPulseApp/ChromeAutomation.swift")
+    webkit = read("Sources/ChatPulseApp/WebKitBrowserController.swift")
+    browser_window = read("Sources/ChatPulseApp/BrowserWindowController.swift")
     app = read("Sources/ChatPulseApp/AppDelegate.swift")
     coordinator = read("Sources/ChatPulseApp/MonitorCoordinator.swift")
     store = read("Sources/ChatPulseCore/SettingsStore.swift")
     package = read("Package.swift")
     workflow = read(".github/workflows/ci.yml") if (ROOT / ".github/workflows/ci.yml").exists() else ""
 
-    checks.extend(
-        [
-            ("01 exact continuation command", EXPECTED_COMMAND in models),
-            ("02 native macOS target", ".macOS(.v13)" in package),
-            ("03 menu-bar accessory mode", "setActivationPolicy(.accessory)" in app),
-            ("04 single start-stop toggle", "toggleMonitoring" in app and '"Запустить"' in app and '"Остановить"' in app),
-            ("05 configurable interval", "setCustomInterval" in app and "checkIntervalSeconds" in models),
-            ("06 minimum interval guard", "min(max(value, 30)" in models),
-            ("07 persistent chat titles", "title: String" in models and "JSONSettingsStore" in store),
-            ("08 atomic settings write", ".atomic" in store),
-            ("09 baseline after launch", "isFirstObservationThisRun" in engine),
-            ("10 response-change cooldown", ".responseChanged" in engine),
-            ("11 duplicate suppression", "lastCommandedFingerprint" in engine),
-            ("12 waits for assistant", "latestRole == .assistant" in engine),
-            ("13 generation detection", "stop-button" in chrome),
-            ("14 technical limit detection", "limitDetected" in chrome),
-            ("15 page-error detection", "errorDetected" in chrome),
-            ("16 confirmed send", "confirmSendJavaScript" in chrome and '"confirmed"' in chrome),
-            ("17 stop cancellation before send", "Send cancelled because monitoring stopped" in coordinator),
-            ("18 Chrome-only automation", 'application "Google Chrome"' in chrome),
-            ("19 CI validates tests and app build", "swift test" in workflow and "build_app.sh" in workflow),
-            ("20 no external AI/API dependency", not re.search(r"OpenAI|Anthropic|Ollama|API_KEY", package, re.I)),
-        ]
-    )
+    checks: list[tuple[str, bool]] = [
+        ("01 точная команда продолжения", EXPECTED_COMMAND in models),
+        ("02 нативная цель macOS", ".macOS(.v13)" in package),
+        ("03 приложение только в строке меню", "setActivationPolicy(.accessory)" in app),
+        ("04 единая кнопка запуска и остановки", "toggleMonitoring" in app and '"Запустить"' in app and '"Остановить"' in app),
+        ("05 настраиваемый интервал", "setCustomInterval" in app and "checkIntervalSeconds" in models),
+        ("06 безопасные границы интервала", "min(max(value, 30)" in models),
+        ("07 сохранение названий чатов", "title: String" in models and "JSONSettingsStore" in store),
+        ("08 атомарная запись настроек", ".atomic" in store),
+        ("09 пассивная первая проверка", "isFirstObservationThisRun" in engine),
+        ("10 ожидание после нового ответа", ".responseChanged" in engine),
+        ("11 защита от повтора", "lastCommandedFingerprint" in engine),
+        ("12 ожидание ответа ассистента", "latestRole == .assistant" in engine),
+        ("13 определение продолжающейся генерации", "stop-button" in webkit),
+        ("14 детектор технического лимита удалён", "limitDetected" not in models + engine + webkit and "technicalLimit" not in models + engine),
+        ("15 обработка ошибок страницы", "errorDetected" in webkit),
+        ("16 подтверждение фактической отправки", "confirmSendJavaScript" in webkit and '"confirmed"' in webkit),
+        ("17 остановка отменяет отправку", "Отправка отменена: наблюдение остановлено" in coordinator),
+        ("18 встроенный WebKit без Chrome", "WKWebView" in webkit + browser_window and "Google Chrome" not in webkit + app),
+        ("19 CI проверяет тесты и сборку", "swift test" in workflow and "build_app.sh" in workflow),
+        ("20 нет внешнего ИИ или платного API", not re.search(r"Anthropic|Ollama|API_KEY", package, re.I)),
+    ]
 
     failed = [name for name, passed in checks if not passed]
     for name, passed in checks:
         print(f"[{'PASS' if passed else 'FAIL'}] {name}")
 
-    print(f"\n{len(checks) - len(failed)}/{len(checks)} quality gates passed")
+    print(f"\n{len(checks) - len(failed)}/{len(checks)} проверок пройдено")
     if failed:
-        print("Failed gates:", ", ".join(failed), file=sys.stderr)
+        print("Не пройдены:", ", ".join(failed), file=sys.stderr)
         return 1
     return 0
 

@@ -61,8 +61,9 @@ const optionsCSS = await readFile(path.join(extensionRoot, "options/options.css"
 
 assert.ok(model.includes("продолжай и не останавливайся до технического лимита"));
 assert.ok(model.includes("lastCommandedFingerprint"));
-assert.ok(model.includes("submitted-unconfirmed"));
 assert.ok(model.includes("lastObservedSessionId"));
+assert.ok(model.includes("recordDispatch"));
+assert.ok(background.includes("submitted-unconfirmed"));
 assert.ok(background.includes("mergeRuntimeState"));
 assert.ok(background.includes("liveChat?.enabled"));
 assert.ok(background.includes("merged = await configureAlarm(merged)"));

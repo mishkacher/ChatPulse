@@ -4,7 +4,7 @@ import Foundation
 import ChatPulseCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
     private var statusMenuItem: NSMenuItem!
@@ -14,14 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private var checkNowMenuItem: NSMenuItem!
 
     private let store: JSONSettingsStore
-    private let browser: ChromeAutomation
+    private let browser: WebKitBrowserController
     private let log: RingLog
     private let coordinator: MonitorCoordinator
     private var settings: AppSettings
     private var monitorStatus = MonitorStatus(state: .stopped, checkedAt: nil, nextCheckAt: nil)
 
     override init() {
-        let browser = ChromeAutomation()
+        let browser = WebKitBrowserController()
         let log = RingLog(capacity: 300)
         let resolvedStore: JSONSettingsStore
         let resolvedSettings: AppSettings
@@ -33,14 +33,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
             } catch {
                 resolvedSettings = AppSettings()
                 try? resolvedStore.save(resolvedSettings)
-                log.append(LogEntry(level: .warning, message: "Corrupted settings were reset: \(error.localizedDescription)"))
+                log.append(LogEntry(
+                    level: .warning,
+                    message: "Повреждённые настройки сброшены: \(error.localizedDescription)"
+                ))
             }
         } catch {
             let fallbackURL = URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("ChatPulse-settings.json")
             resolvedStore = JSONSettingsStore(fileURL: fallbackURL)
             resolvedSettings = (try? resolvedStore.load()) ?? AppSettings()
-            log.append(LogEntry(level: .warning, message: "Using temporary settings store: \(error.localizedDescription)"))
+            log.append(LogEntry(
+                level: .warning,
+                message: "Используется временное хранилище настроек: \(error.localizedDescription)"
+            ))
         }
 
         self.browser = browser
@@ -70,16 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
 
     private func configureCallbacks() {
         coordinator.onStatus = { [weak self] status in
-            Task { @MainActor in
-                self?.monitorStatus = status
-                self?.refreshDynamicMenuItems()
-            }
+            self?.monitorStatus = status
+            self?.refreshDynamicMenuItems()
         }
         coordinator.onSettingsChanged = { [weak self] settings in
-            Task { @MainActor in
-                self?.settings = settings
-                self?.rebuildChatsSubmenu()
-            }
+            self?.settings = settings
+            self?.rebuildChatsSubmenu()
+        }
+        browser.onAddCurrentChat = { [weak self] in
+            self?.addCurrentChatFromBrowser()
         }
     }
 
@@ -117,8 +122,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
 
         menu.addItem(.separator())
 
+        let openBrowser = NSMenuItem(
+            title: "Открыть браузер ChatPulse…",
+            action: #selector(showBrowser),
+            keyEquivalent: "b"
+        )
+        openBrowser.target = self
+        menu.addItem(openBrowser)
+
         let addCurrent = NSMenuItem(
-            title: "Добавить текущий чат Chrome",
+            title: "Добавить текущий чат браузера",
             action: #selector(addCurrentChat),
             keyEquivalent: ""
         )
@@ -131,13 +144,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
 
         menu.addItem(.separator())
 
-        let chromeSetup = NSMenuItem(
-            title: "Настройка Chrome…",
-            action: #selector(showChromeSetup),
+        let browserInfo = NSMenuItem(
+            title: "Как работает встроенный браузер…",
+            action: #selector(showBrowserInfo),
             keyEquivalent: ""
         )
-        chromeSetup.target = self
-        menu.addItem(chromeSetup)
+        browserInfo.target = self
+        menu.addItem(browserInfo)
 
         let showLog = NSMenuItem(title: "Последние действия…", action: #selector(showRecentLog), keyEquivalent: "")
         showLog.target = self
@@ -206,7 +219,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
                 enabled.state = chat.isEnabled ? .on : .off
                 chatMenu.addItem(enabled)
 
-                let open = NSMenuItem(title: "Открыть в Chrome", action: #selector(openChat(_:)), keyEquivalent: "")
+                let open = NSMenuItem(
+                    title: "Открыть во встроенном браузере",
+                    action: #selector(openChat(_:)),
+                    keyEquivalent: ""
+                )
                 open.target = self
                 open.representedObject = chat.id.uuidString
                 chatMenu.addItem(open)
@@ -226,16 +243,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     }
 
     @objc private func toggleMonitoring() {
-        if coordinator.isRunning {
-            coordinator.stop()
-        } else {
-            coordinator.start()
-        }
+        coordinator.isRunning ? coordinator.stop() : coordinator.start()
         refreshDynamicMenuItems()
     }
 
     @objc private func checkNow() {
         coordinator.checkNow()
+    }
+
+    @objc private func showBrowser() {
+        browser.showBrowser()
+    }
+
+    @objc private func addCurrentChat() {
+        addCurrentChatFromBrowser()
+    }
+
+    private func addCurrentChatFromBrowser() {
+        do {
+            let captured = try browser.captureCurrentChat()
+            if let existing = settings.chats.firstIndex(where: { $0.url == captured.url }) {
+                settings.chats[existing].title = captured.title
+                settings.chats[existing].isEnabled = true
+                showAlert(title: "Чат уже добавлен", message: "Название обновлено: \(captured.title)")
+            } else {
+                settings.chats.append(MonitoredChat(title: captured.title, url: captured.url))
+                showAlert(title: "Чат добавлен", message: captured.title)
+            }
+            persistSettings()
+            rebuildChatsSubmenu()
+        } catch {
+            showAlert(title: "Не удалось добавить чат", message: error.localizedDescription)
+        }
     }
 
     @objc private func selectInterval(_ sender: NSMenuItem) {
@@ -269,24 +308,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         coordinator.reschedule()
     }
 
-    @objc private func addCurrentChat() {
-        do {
-            let captured = try browser.captureCurrentChat()
-            if let existing = settings.chats.firstIndex(where: { $0.url == captured.url }) {
-                settings.chats[existing].title = captured.title
-                settings.chats[existing].isEnabled = true
-                showAlert(title: "Чат уже добавлен", message: "Название обновлено: \(captured.title)")
-            } else {
-                settings.chats.append(MonitoredChat(title: captured.title, url: captured.url))
-                showAlert(title: "Чат добавлен", message: captured.title)
-            }
-            persistSettings()
-            rebuildChatsSubmenu()
-        } catch {
-            showAlert(title: "Не удалось добавить чат", message: error.localizedDescription)
-        }
-    }
-
     @objc private func toggleChat(_ sender: NSMenuItem) {
         guard let id = representedChatID(sender),
               let index = settings.chats.firstIndex(where: { $0.id == id }) else { return }
@@ -297,11 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
 
     @objc private func openChat(_ sender: NSMenuItem) {
         guard let chat = representedChat(sender) else { return }
-        do {
-            try browser.open(chat: chat)
-        } catch {
-            showAlert(title: "Не удалось открыть чат", message: error.localizedDescription)
-        }
+        browser.open(chat: chat)
     }
 
     @objc private func removeChat(_ sender: NSMenuItem) {
@@ -318,10 +335,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         rebuildChatsSubmenu()
     }
 
-    @objc private func showChromeSetup() {
+    @objc private func showBrowserInfo() {
         showAlert(
-            title: "Настройка Google Chrome",
-            message: "1. Откройте Chrome.\n2. В меню View выберите Developer.\n3. Включите Allow JavaScript from Apple Events.\n4. При первом запуске разрешите ChatPulse управлять Google Chrome в настройках macOS."
+            title: "Встроенный браузер ChatPulse",
+            message: "Браузер работает на системном движке WebKit — той же технологии, что используется Safari. Вход в ChatGPT выполняется один раз внутри ChatPulse и сохраняется отдельно от Safari. Фоновая проверка идёт в скрытом WebKit-окне и не переключает открытую страницу."
         )
     }
 
@@ -331,7 +348,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         let entries = log.snapshot().suffix(25)
         let text = entries.isEmpty
             ? "Действий пока нет."
-            : entries.map { "[\(formatter.string(from: $0.date))] \($0.level.rawValue)  \($0.message)" }.joined(separator: "\n")
+            : entries.map { "[\(formatter.string(from: $0.date))] \($0.level.rawValue)  \($0.message)" }
+                .joined(separator: "\n")
 
         let alert = NSAlert()
         alert.messageText = "Последние действия"
@@ -376,8 +394,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
             return "Статус: проверка чатов…"
         case .sent(let title):
             return "Отправлено: \(title)"
-        case .limit(let title):
-            return "Технический лимит: \(title)"
         case .warning(let message):
             return "Внимание: \(message)"
         }
@@ -401,7 +417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "ОК")
         alert.runModal()
     }
 }

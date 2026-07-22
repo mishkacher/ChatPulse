@@ -7,6 +7,7 @@ application.delegate = delegate
 
 Task { @MainActor in
     SkinCoordinator.shared.start()
+    SkinStatusMenuInstaller.shared.start()
 }
 
 application.run()

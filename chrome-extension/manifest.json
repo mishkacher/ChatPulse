@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ChatPulse",
-  "version": "0.5.0",
-  "version_name": "0.5.0 beta",
+  "version": "0.5.1",
+  "version_name": "0.5.1 beta",
   "description": "Локально продолжает выбранные чаты ChatGPT в уже авторизованном профиле Chrome.",
   "minimum_chrome_version": "120",
   "permissions": [

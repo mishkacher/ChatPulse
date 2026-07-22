@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 beta — stale-tab recovery
+
+- detect Chrome `discarded` and `frozen` managed tabs before reading the page;
+- mark managed tabs as `autoDiscardable: false` when supported;
+- add bounded content-script timeouts and automatic reinjection;
+- reload and rehydrate a chat when its content script stops responding or the page reports an error;
+- periodically refresh inactive chats every 5–15 minutes to synchronize stale SPA content with the server;
+- never perform a periodic refresh on an active tab, during normal generation, or while the composer contains a user draft;
+- recover an inactive generation only after it has remained stuck for more than 20 minutes;
+- repeat the freshness preflight immediately before sending a continuation command;
+- preserve at-most-once dispatch protection across all recovery paths;
+- record the last recovery time, reason and recovery count in local state;
+- add dedicated stale-tab recovery tests and expand the Manifest V3 audit.
+
 ## 0.5.0 beta — Chrome extension
 
 - replaced the unsupported embedded WebKit login with the authenticated Google Chrome profile;

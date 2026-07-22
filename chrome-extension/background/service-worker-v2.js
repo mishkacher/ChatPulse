@@ -8,12 +8,18 @@ import {
   mergeRuntimeState,
   normalizeChatURL,
   normalizeState,
-  recordDispatch
+  planTabRecovery,
+  recordDispatch,
+  recordRecovery
 } from "../lib/model-v2.js";
 
 const STORAGE_KEY = "chatpulseState";
 const ALARM_NAME = "chatpulse-monitor";
 const CHATGPT_PATTERNS = ["https://chatgpt.com/*", "https://chat.openai.com/*"];
+const TAB_LOAD_TIMEOUT_MS = 45_000;
+const HYDRATION_TIMEOUT_MS = 20_000;
+const CONTENT_MESSAGE_TIMEOUT_MS = 4_000;
+const POST_RELOAD_SETTLE_MS = 750;
 let activeCheck = null;
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -110,6 +116,7 @@ async function handleMessage(message) {
       if (!chat) throw new Error("Чат не найден.");
       const tab = await chrome.tabs.create({ url: chat.url, active: true });
       chat.tabId = tab.id ?? null;
+      if (Number.isInteger(tab.id)) await protectManagedTab(tab.id);
       await persistAndPublish(state);
       return { state };
     }
@@ -135,9 +142,10 @@ async function addCurrentChat() {
     throw new Error("Откройте конкретный чат ChatGPT в активной вкладке Chrome.");
   }
 
+  await protectManagedTab(tab.id);
   let title = tab.title || "Чат ChatGPT";
   try {
-    const response = await sendToContent(tab.id, { type: "CHATPULSE_INSPECT" });
+    const response = await sendToContent(tab.id, { type: "CHATPULSE_INSPECT" }, { attempts: 2 });
     if (response?.snapshot?.title) title = response.snapshot.title;
   } catch {
     // Заголовок вкладки используется как безопасный fallback.
@@ -151,7 +159,8 @@ async function addCurrentChat() {
       title,
       tabId: tab.id,
       enabled: true,
-      lastObservedSessionId: null
+      lastObservedSessionId: null,
+      lastHardRefreshAt: new Date().toISOString()
     };
     state = appendLog(state, "info", `Чат «${title}» обновлён и включён`);
   } else {
@@ -213,16 +222,26 @@ async function performCheck(source, allowWhenStopped) {
     if (!chat.enabled) continue;
 
     try {
-      const tab = await ensureChatTab(chat);
+      let tab = await ensureChatTab(chat);
       chat.tabId = tab.id ?? null;
-      await waitForTabComplete(tab.id, 45_000);
 
-      const response = await sendToContent(tab.id, { type: "CHATPULSE_INSPECT" });
-      if (!response?.ok || !response.snapshot) {
-        throw new Error(response?.error || "Content script не вернул состояние страницы.");
+      const freshness = await obtainFreshSnapshot({
+        tab,
+        chat,
+        intervalMinutes: observedState.intervalMinutes
+      });
+      tab = freshness.tab;
+      let runtimeChat = { ...chat, tabId: tab.id ?? null };
+      if (freshness.recoveryReason) {
+        runtimeChat = recordRecovery(runtimeChat, freshness.recoveryReason);
+        observedState = appendLog(
+          observedState,
+          "info",
+          `${chat.title}: вкладка восстановлена (${recoveryDescription(freshness.recoveryReason)})`
+        );
       }
 
-      const result = decide(chat, response.snapshot, observedState.sessionId);
+      const result = decide(runtimeChat, freshness.snapshot, observedState.sessionId);
       observedState.chats[index] = result.chat;
       observedState = appendLog(
         observedState,
@@ -243,10 +262,43 @@ async function performCheck(source, allowWhenStopped) {
         continue;
       }
 
-      const sendResponse = await sendToContent(tab.id, {
+      const preflight = await obtainFreshSnapshot({
+        tab: await chrome.tabs.get(tab.id),
+        chat: observedState.chats[index],
+        intervalMinutes: latestState.intervalMinutes,
+        allowPeriodicRefresh: false
+      });
+      if (preflight.recoveryReason) {
+        observedState.chats[index] = recordRecovery(
+          observedState.chats[index],
+          preflight.recoveryReason
+        );
+        observedState = appendLog(
+          observedState,
+          "info",
+          `${chat.title}: вкладка восстановлена перед отправкой (${recoveryDescription(preflight.recoveryReason)})`
+        );
+      }
+
+      const preflightDecision = decide(
+        observedState.chats[index],
+        preflight.snapshot,
+        observedState.sessionId
+      );
+      observedState.chats[index] = preflightDecision.chat;
+      if (preflightDecision.decision !== "send-continuation") {
+        observedState = appendLog(
+          observedState,
+          "info",
+          `Отправка в «${chat.title}» отменена после повторной проверки: ${decisionDescription(preflightDecision.decision)}`
+        );
+        continue;
+      }
+
+      const sendResponse = await sendToContent(preflight.tab.id, {
         type: "CHATPULSE_SEND",
         command: latestState.commandText
-      });
+      }, { attempts: 2, timeoutMs: 15_000 });
       if (!sendResponse?.ok) throw new Error(sendResponse?.error || "Команда не отправлена.");
 
       const outcome = sendResponse.outcome === "confirmed"
@@ -254,7 +306,7 @@ async function performCheck(source, allowWhenStopped) {
         : "submitted-unconfirmed";
       observedState.chats[index] = recordDispatch(
         observedState.chats[index],
-        result.fingerprint,
+        preflightDecision.fingerprint,
         outcome
       );
       observedState = appendLog(
@@ -287,7 +339,10 @@ async function ensureChatTab(chat) {
   if (Number.isInteger(chat.tabId)) {
     try {
       const tab = await chrome.tabs.get(chat.tabId);
-      if (normalizeChatURL(tab.url) === chat.url) return tab;
+      if (normalizeChatURL(tab.url) === chat.url) {
+        await protectManagedTab(tab.id);
+        return chrome.tabs.get(tab.id);
+      }
     } catch {
       // Вкладка закрыта — ищем существующую или создаём новую.
     }
@@ -295,31 +350,137 @@ async function ensureChatTab(chat) {
 
   const tabs = await chrome.tabs.query({ url: CHATGPT_PATTERNS });
   const existing = tabs.find((tab) => normalizeChatURL(tab.url) === chat.url);
-  if (existing) return existing;
-  return chrome.tabs.create({ url: chat.url, active: false, pinned: false });
+  if (existing?.id) {
+    await protectManagedTab(existing.id);
+    return chrome.tabs.get(existing.id);
+  }
+
+  const created = await chrome.tabs.create({ url: chat.url, active: false, pinned: false });
+  if (!Number.isInteger(created.id)) throw new Error("Chrome не вернул идентификатор вкладки.");
+  await protectManagedTab(created.id);
+  return chrome.tabs.get(created.id);
+}
+
+async function protectManagedTab(tabId) {
+  try {
+    await chrome.tabs.update(tabId, { autoDiscardable: false });
+  } catch {
+    // Старые версии Chrome могут не принять autoDiscardable; восстановление всё равно работает.
+  }
+}
+
+async function obtainFreshSnapshot({
+  tab,
+  chat,
+  intervalMinutes,
+  allowPeriodicRefresh = true
+}) {
+  if (!Number.isInteger(tab?.id)) throw new Error("У вкладки ChatGPT отсутствует идентификатор.");
+  await protectManagedTab(tab.id);
+
+  let currentTab = await chrome.tabs.get(tab.id);
+  if (currentTab.discarded === true || currentTab.frozen === true) {
+    const reason = currentTab.discarded === true ? "discarded-tab" : "frozen-tab";
+    return recoverAndInspect(currentTab.id, reason);
+  }
+
+  await waitForTabComplete(currentTab.id, TAB_LOAD_TIMEOUT_MS);
+
+  let snapshot = null;
+  try {
+    const response = await sendToContent(
+      currentTab.id,
+      { type: "CHATPULSE_INSPECT" },
+      { attempts: 2, timeoutMs: CONTENT_MESSAGE_TIMEOUT_MS }
+    );
+    snapshot = response?.ok ? response.snapshot : null;
+  } catch {
+    snapshot = null;
+  }
+
+  // Состояние вкладки могло измениться за время ожидания загрузки или ответа DOM.
+  currentTab = await chrome.tabs.get(currentTab.id);
+  const plan = planTabRecovery({
+    tab: currentTab,
+    snapshot,
+    chat: allowPeriodicRefresh ? chat : { ...chat, lastHardRefreshAt: new Date().toISOString() },
+    intervalMinutes
+  });
+
+  if (plan.refresh) return recoverAndInspect(currentTab.id, plan.reason);
+  if (!snapshot) {
+    if (currentTab.active === true) {
+      throw new Error("Активная вкладка не ответила; автоматическое обновление отменено для защиты действий пользователя.");
+    }
+    throw new Error("Не удалось получить актуальное состояние страницы ChatGPT.");
+  }
+  return { tab: currentTab, snapshot, recoveryReason: null };
+}
+
+async function recoverAndInspect(tabId, reason) {
+  await reloadTabAndWait(tabId, TAB_LOAD_TIMEOUT_MS);
+  await delay(POST_RELOAD_SETTLE_MS);
+  const snapshot = await waitForHydratedSnapshot(tabId, HYDRATION_TIMEOUT_MS);
+  return {
+    tab: await chrome.tabs.get(tabId),
+    snapshot,
+    recoveryReason: reason
+  };
+}
+
+async function waitForHydratedSnapshot(tabId, timeoutMs) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+  let lastError = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const response = await sendToContent(
+        tabId,
+        { type: "CHATPULSE_INSPECT" },
+        { attempts: 1, timeoutMs: CONTENT_MESSAGE_TIMEOUT_MS }
+      );
+      if (response?.ok && response.snapshot) {
+        lastSnapshot = response.snapshot;
+        const hydrated = lastSnapshot.pageReady
+          && (!lastSnapshot.authenticated
+            || lastSnapshot.messageCount > 0
+            || lastSnapshot.hasComposer === true);
+        if (hydrated) return lastSnapshot;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(500);
+  }
+
+  if (lastSnapshot) return lastSnapshot;
+  throw new Error(
+    `Страница ChatGPT не восстановилась после обновления: ${lastError?.message || "DOM недоступен"}`
+  );
 }
 
 async function waitForTabComplete(tabId, timeoutMs) {
   const current = await chrome.tabs.get(tabId);
-  if (current.status === "complete") return current;
+  if (current.status === "complete" && current.discarded !== true) return current;
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => finish(new Error("Вкладка ChatGPT не загрузилась за 45 секунд.")),
       timeoutMs
     );
-    const onUpdated = (updatedTabId, changeInfo, tab) => {
-      if (updatedTabId === tabId && changeInfo.status === "complete") finish(null, tab);
+    const onUpdated = (updatedTabId, changeInfo, updatedTab) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") finish(null, updatedTab);
     };
     const onRemoved = (removedTabId) => {
       if (removedTabId === tabId) finish(new Error("Вкладка ChatGPT закрыта во время проверки."));
     };
 
-    function finish(error, tab) {
+    function finish(error, updatedTab) {
       clearTimeout(timeout);
       chrome.tabs.onUpdated.removeListener(onUpdated);
       chrome.tabs.onRemoved.removeListener(onRemoved);
-      error ? reject(error) : resolve(tab);
+      error ? reject(error) : resolve(updatedTab);
     }
 
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -327,15 +488,52 @@ async function waitForTabComplete(tabId, timeoutMs) {
   });
 }
 
-async function sendToContent(tabId, message) {
+async function reloadTabAndWait(tabId, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(
+      () => finish(new Error("Вкладка ChatGPT не обновилась за 45 секунд.")),
+      timeoutMs
+    );
+    const onUpdated = (updatedTabId, changeInfo, updatedTab) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") finish(null, updatedTab);
+    };
+    const onRemoved = (removedTabId) => {
+      if (removedTabId === tabId) finish(new Error("Вкладка ChatGPT закрыта во время восстановления."));
+    };
+
+    function finish(error, updatedTab) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+      error ? reject(error) : resolve(updatedTab);
+    }
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved.addListener(onRemoved);
+    chrome.tabs.reload(tabId).catch((error) => finish(error));
+  });
+}
+
+async function sendToContent(
+  tabId,
+  message,
+  { attempts = 3, timeoutMs = CONTENT_MESSAGE_TIMEOUT_MS } = {}
+) {
   let lastError = null;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const response = await chrome.tabs.sendMessage(tabId, message);
+      const response = await withTimeout(
+        chrome.tabs.sendMessage(tabId, message),
+        timeoutMs,
+        "content script не ответил вовремя"
+      );
       if (response) return response;
     } catch (error) {
       lastError = error;
-      if (attempt === 1) {
+      if (attempt === 0) {
         try {
           await chrome.scripting.executeScript({
             target: { tabId },
@@ -346,7 +544,7 @@ async function sendToContent(tabId, message) {
         }
       }
     }
-    await delay(500);
+    await delay(350);
   }
   throw new Error(
     `Не удалось связаться со страницей ChatGPT: ${lastError?.message || "content script недоступен"}`
@@ -418,6 +616,34 @@ function decisionDescription(decision) {
     "already-continued": "этот ответ уже получил команду",
     "send-continuation": "ответ стабилен и готов к продолжению"
   }[decision] || decision;
+}
+
+function recoveryDescription(reason) {
+  return {
+    "discarded-tab": "Chrome выгрузил вкладку из памяти",
+    "frozen-tab": "Chrome заморозил вкладку",
+    "content-unreachable": "content script перестал отвечать",
+    "page-error": "страница сообщила об ошибке",
+    "periodic-freshness": "плановое обновление содержимого",
+    "stuck-generation": "генерация зависла более 20 минут",
+    "missing-tab": "вкладка была потеряна"
+  }[reason] || reason;
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
 }
 
 function delay(milliseconds) {

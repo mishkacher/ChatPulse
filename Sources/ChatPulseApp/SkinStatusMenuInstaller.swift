@@ -87,8 +87,8 @@ final class SkinStatusMenuInstaller: NSObject {
 
         SkinCoordinator.shared.select(skin)
 
-        if let parent = sender.parent,
-           let statusParent = parent.supermenu?.items.first(where: {
+        if let statusMenu = sender.menu?.supermenu,
+           let statusParent = statusMenu.items.first(where: {
                $0.identifier == parentIdentifier
            }) {
             statusParent.title = "Скин: \(skin.displayName)"

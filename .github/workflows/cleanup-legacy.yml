@@ -1,0 +1,65 @@
+name: Cleanup Legacy macOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cleanup-legacy.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    name: Удаление старой macOS-версии
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Удалить старый релиз, тег, ветки и артефакты
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Удаление релиза и тега v0.4.0"
+          if gh release view v0.4.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete v0.4.0 --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          else
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v0.4.0" >/dev/null 2>&1 || true
+          fi
+
+          echo "Удаление legacy и feature-веток"
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/legacy/macos-webkit-v0.4.0" >/dev/null 2>&1 || true
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/feature/chrome-extension" >/dev/null 2>&1 || true
+
+          echo "Удаление старых macOS Actions-артефактов"
+          while IFS= read -r artifact_id; do
+            [[ -z "$artifact_id" ]] && continue
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+          done < <(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | select((.name | ascii_downcase | contains("macos")) or (.name | contains("0.4.0"))) | .id'
+          )
+
+          echo "Удаление старых workflow runs CI/Release"
+          while IFS= read -r run_id; do
+            [[ -z "$run_id" ]] && continue
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" || true
+          done < <(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+              --jq '.workflow_runs[] | select(.name == "CI" or .name == "Release") | .id'
+          )
+
+          echo "Попытка обновить краткое описание репозитория"
+          if gh api --method PATCH "repos/$GITHUB_REPOSITORY" \
+            -f description='Локальное Chrome-расширение для безопасного автоматического продолжения выбранных чатов ChatGPT.' \
+            >/dev/null 2>&1; then
+            echo "Краткое описание репозитория обновлено."
+          else
+            echo "GITHUB_TOKEN не имеет права изменять поле About; README уже обновлён."
+          fi
+
+          echo "Legacy cleanup completed."

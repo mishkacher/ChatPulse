@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "agent/**"]
+    branches: [main, "agent/**", "feature/**"]
   pull_request:
 
 permissions:
@@ -10,8 +10,14 @@ permissions:
 
 jobs:
   test-and-build:
+    name: Полный цикл ${{ matrix.round }}/5
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3, 4, 5]
+
     steps:
       - name: Получение исходников
         uses: actions/checkout@v4
@@ -19,19 +25,28 @@ jobs:
       - name: Версия Swift
         run: swift --version
 
-      - name: Модульные тесты
+      - name: Модульные тесты — цикл ${{ matrix.round }}
         run: swift test
 
-      - name: 20 проверок качества
+      - name: 20 проверок качества — цикл ${{ matrix.round }}
         run: python3 scripts/quality_gate.py
 
-      - name: Сборка приложения macOS
+      - name: Сборка приложения macOS — цикл ${{ matrix.round }}
         run: bash scripts/build_app.sh
 
+      - name: Проверка bundle — цикл ${{ matrix.round }}
+        run: |
+          test -x dist/ChatPulse.app/Contents/MacOS/ChatPulse
+          plutil -lint dist/ChatPulse.app/Contents/Info.plist
+          codesign --verify --deep --strict dist/ChatPulse.app
+          test "$(defaults read "$PWD/dist/ChatPulse.app/Contents/Info" CFBundleShortVersionString)" = "0.4.0"
+
       - name: Упаковка приложения
+        if: matrix.round == 5
         run: ditto -c -k --sequesterRsrc --keepParent dist/ChatPulse.app dist/ChatPulse-macOS.zip
 
       - name: Публикация неподписанного приложения
+        if: matrix.round == 5
         uses: actions/upload-artifact@v4
         with:
           name: ChatPulse-macOS

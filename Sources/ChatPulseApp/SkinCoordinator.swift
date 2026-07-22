@@ -50,7 +50,9 @@ final class SkinCoordinator: NSObject {
             queue: .main
         ) { [weak self] notification in
             guard let window = notification.object as? NSWindow else { return }
-            Task { @MainActor in self?.apply(to: window) }
+            Task { @MainActor in
+                self?.apply(to: window)
+            }
         })
         observerTokens.append(center.addObserver(
             forName: NSWindow.didResizeNotification,
@@ -58,7 +60,9 @@ final class SkinCoordinator: NSObject {
             queue: .main
         ) { [weak self] notification in
             guard let window = notification.object as? NSWindow else { return }
-            Task { @MainActor in self?.apply(to: window) }
+            Task { @MainActor in
+                self?.apply(to: window)
+            }
         })
 
         applyToAllWindows()
@@ -89,7 +93,9 @@ final class SkinCoordinator: NSObject {
 
     private func containsWebView(in view: NSView) -> Bool {
         if view is WKWebView { return true }
-        return view.subviews.contains(where: containsWebView(in:))
+        return view.subviews.contains { subview in
+            containsWebView(in: subview)
+        }
     }
 
     private func apply(to window: NSWindow) {
@@ -107,15 +113,16 @@ final class SkinCoordinator: NSObject {
     }
 
     private func browserToolbar(in window: NSWindow) -> NSView? {
-        guard let contentView = window.contentView else { return nil }
-        return contentView.subviews.first { view in
-            !(view is WKWebView) && containsWebView(in: contentView)
+        guard let contentView = window.contentView,
+              containsWebView(in: contentView) else {
+            return nil
         }
+        return contentView.subviews.first { !($0 is WKWebView) }
     }
 
     private func installSkinSelectorIfNeeded(in window: NSWindow) {
         guard let toolbar = browserToolbar(in: window),
-              toolbar.viewWithIdentifier(Constants.selectorIdentifier) == nil else {
+              findView(in: toolbar, identifier: Constants.selectorIdentifier) == nil else {
             return
         }
 
@@ -134,15 +141,14 @@ final class SkinCoordinator: NSObject {
         toolbar.addSubview(selector)
 
         if let statusField = findLoginStatusField(in: toolbar) {
-            for constraint in toolbar.constraints where
-                (constraint.firstItem as AnyObject?) === statusField
-                    && constraint.firstAttribute == .trailing {
-                constraint.priority = .defaultHigh
-            }
-            for constraint in toolbar.constraints where
-                (constraint.secondItem as AnyObject?) === statusField
-                    && constraint.secondAttribute == .trailing {
-                constraint.priority = .defaultHigh
+            for constraint in toolbar.constraints {
+                let firstMatches = (constraint.firstItem as? NSView) === statusField
+                    && constraint.firstAttribute == .trailing
+                let secondMatches = (constraint.secondItem as? NSView) === statusField
+                    && constraint.secondAttribute == .trailing
+                if firstMatches || secondMatches {
+                    constraint.priority = .defaultHigh
+                }
             }
 
             NSLayoutConstraint.activate([
@@ -159,6 +165,19 @@ final class SkinCoordinator: NSObject {
             selector.widthAnchor.constraint(equalToConstant: 174),
             selector.heightAnchor.constraint(equalToConstant: 25)
         ])
+    }
+
+    private func findView(
+        in root: NSView,
+        identifier: NSUserInterfaceItemIdentifier
+    ) -> NSView? {
+        if root.identifier == identifier { return root }
+        for subview in root.subviews {
+            if let found = findView(in: subview, identifier: identifier) {
+                return found
+            }
+        }
+        return nil
     }
 
     private func findLoginStatusField(in view: NSView) -> NSTextField? {
@@ -186,8 +205,11 @@ final class SkinCoordinator: NSObject {
     }
 
     private func updateSelector(in window: NSWindow) {
-        guard let selector = window.contentView?
-            .viewWithIdentifier(Constants.selectorIdentifier) as? NSPopUpButton else {
+        guard let contentView = window.contentView,
+              let selector = findView(
+                in: contentView,
+                identifier: Constants.selectorIdentifier
+              ) as? NSPopUpButton else {
             return
         }
         if let index = selector.itemArray.firstIndex(where: {

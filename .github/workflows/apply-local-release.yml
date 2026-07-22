@@ -1,0 +1,82 @@
+name: Apply local ChatPulse 0.5.3 release
+
+on:
+  push:
+    branches:
+      - feature/health-center-0.5.3
+    paths:
+      - ".github/workflows/apply-local-release.yml"
+      - ".release-payload/**"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    name: Применить локально проверенный пакет
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Получение рабочей ветки
+        uses: actions/checkout@v4
+        with:
+          ref: feature/health-center-0.5.3
+          fetch-depth: 0
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Восстановление локального payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .release-payload/part-*.txt | base64 --decode > /tmp/chatpulse-0.5.3.tar.gz
+          echo "2773caf38a801fdc50599a93019acd318de4eeb38ca15d18cef040db0034184a  /tmp/chatpulse-0.5.3.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/chatpulse-0.5.3.tar.gz -C .
+
+      - name: Минимальная удалённая интеграция
+        run: npm run audit:ci
+
+      - name: Проверка идентичности локальной сборке
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c ChatPulse-Chrome-v0.5.3-beta.zip.sha256
+          test "$(sha256sum ChatPulse-Chrome-v0.5.3-beta.zip | awk '{print $1}')" = "f3a67ae4ac13d3bbd11fb874337dbb7fa859f440cd6548b0a2d542600c19a5c7"
+
+      - name: Проверка отсутствия секретов
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE "API[_-]?KEY|CLIENT[_-]?SECRET|BEGIN (RSA|OPENSSH) PRIVATE KEY" chrome-extension tests scripts
+
+      - name: Сохранение проверенного артефакта
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/chatpulse-artifact
+          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip /tmp/chatpulse-artifact/
+          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip.sha256 /tmp/chatpulse-artifact/
+
+      - name: Публикация одного продуктового commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .release-payload .github/workflows/apply-local-release.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Добавить центр здоровья и circuit breaker ChatPulse 0.5.3"
+          git push origin HEAD:feature/health-center-0.5.3
+
+      - name: Публикация beta-артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatPulse-Chrome-v0.5.3-beta
+          path: /tmp/chatpulse-artifact/*
+          if-no-files-found: error
+          retention-days: 30

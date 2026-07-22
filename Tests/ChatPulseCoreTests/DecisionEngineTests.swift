@@ -7,7 +7,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testFirstObservationOnlyRecordsBaseline() {
         let result = engine.evaluate(
-            chat: MonitoredChat(title: "Core", url: "https://chatgpt.com/c/abc"),
+            chat: MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc"),
             snapshot: snapshot(role: .assistant, fingerprint: "answer-1"),
             now: now,
             isFirstObservationThisRun: true
@@ -18,7 +18,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testChangedAssistantResponseIsNotImmediatelyContinued() {
         let chat = MonitoredChat(
-            title: "Core",
+            title: "Ядро",
             url: "https://chatgpt.com/c/abc",
             lastObservedFingerprint: "answer-1",
             lastCommandedFingerprint: "answer-1"
@@ -35,7 +35,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testStableCompletedAssistantResponseIsContinuedOnNextCheck() {
         let chat = MonitoredChat(
-            title: "Core",
+            title: "Ядро",
             url: "https://chatgpt.com/c/abc",
             lastObservedFingerprint: "answer-2",
             lastCommandedFingerprint: "answer-1"
@@ -51,7 +51,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testSameAssistantResponseIsNeverContinuedTwice() {
         let chat = MonitoredChat(
-            title: "Core",
+            title: "Ядро",
             url: "https://chatgpt.com/c/abc",
             lastObservedFingerprint: "answer-2",
             lastCommandedFingerprint: "answer-2"
@@ -67,7 +67,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testUserMessageWaitsForAssistant() {
         let chat = MonitoredChat(
-            title: "Core",
+            title: "Ядро",
             url: "https://chatgpt.com/c/abc",
             lastObservedFingerprint: "command-1"
         )
@@ -80,8 +80,8 @@ final class DecisionEngineTests: XCTestCase {
         XCTAssertEqual(result.decision, .waitingForAssistant)
     }
 
-    func testGenerationLimitErrorAndDisabledStatesNeverSend() {
-        let baseChat = MonitoredChat(title: "Core", url: "https://chatgpt.com/c/abc")
+    func testGenerationErrorAndDisabledStatesNeverSend() {
+        let baseChat = MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc")
         XCTAssertEqual(
             engine.evaluate(
                 chat: baseChat,
@@ -94,15 +94,6 @@ final class DecisionEngineTests: XCTestCase {
         XCTAssertEqual(
             engine.evaluate(
                 chat: baseChat,
-                snapshot: snapshot(role: .assistant, fingerprint: "a", limit: true),
-                now: now,
-                isFirstObservationThisRun: false
-            ).decision,
-            .technicalLimit
-        )
-        XCTAssertEqual(
-            engine.evaluate(
-                chat: baseChat,
                 snapshot: snapshot(role: .assistant, fingerprint: "a", error: true),
                 now: now,
                 isFirstObservationThisRun: false
@@ -111,7 +102,7 @@ final class DecisionEngineTests: XCTestCase {
         )
         XCTAssertEqual(
             engine.evaluate(
-                chat: MonitoredChat(title: "Core", url: baseChat.url, isEnabled: false),
+                chat: MonitoredChat(title: "Ядро", url: baseChat.url, isEnabled: false),
                 snapshot: snapshot(role: .assistant, fingerprint: "a"),
                 now: now,
                 isFirstObservationThisRun: false
@@ -122,7 +113,7 @@ final class DecisionEngineTests: XCTestCase {
 
     func testSuccessfulSendStoresFingerprintAndTimestamp() {
         let chat = engine.recordSuccessfulSend(
-            chat: MonitoredChat(title: "Core", url: "https://chatgpt.com/c/abc"),
+            chat: MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc"),
             fingerprint: "answer-2",
             now: now
         )
@@ -131,7 +122,7 @@ final class DecisionEngineTests: XCTestCase {
     }
 
     func testFullCycleWaitsOneIntervalAfterEveryNewAssistantResponse() {
-        var chat = MonitoredChat(title: "Core", url: "https://chatgpt.com/c/abc")
+        var chat = MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc")
 
         var result = engine.evaluate(
             chat: chat,
@@ -174,14 +165,13 @@ final class DecisionEngineTests: XCTestCase {
     }
 
     func testPageNotReadyAndEmptyPageNeverSend() {
-        let chat = MonitoredChat(title: "Core", url: "https://chatgpt.com/c/abc")
+        let chat = MonitoredChat(title: "Ядро", url: "https://chatgpt.com/c/abc")
         let notReady = BrowserSnapshot(
-            title: "Core",
+            title: "Ядро",
             url: chat.url,
             latestRole: .assistant,
             latestFingerprint: "answer",
             isGenerating: false,
-            limitDetected: false,
             errorDetected: false,
             pageReady: false
         )
@@ -204,16 +194,14 @@ final class DecisionEngineTests: XCTestCase {
         role: MessageRole,
         fingerprint: String?,
         generating: Bool = false,
-        limit: Bool = false,
         error: Bool = false
     ) -> BrowserSnapshot {
         BrowserSnapshot(
-            title: "Core",
+            title: "Ядро",
             url: "https://chatgpt.com/c/abc",
             latestRole: role,
             latestFingerprint: fingerprint,
             isGenerating: generating,
-            limitDetected: limit,
             errorDetected: error
         )
     }

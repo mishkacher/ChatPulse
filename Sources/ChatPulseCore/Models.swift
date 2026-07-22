@@ -81,56 +81,23 @@ public struct MonitoredChat: Codable, Equatable, Identifiable, Sendable {
 public struct AppSettings: Codable, Equatable, Sendable {
     public static let defaultCommand = "продолжай и не останавливайся до технического лимита"
     public static let defaultInterval: TimeInterval = 300
-    public static let defaultSkin: AppSkin = .macOS
 
     public var checkIntervalSeconds: TimeInterval
     public var commandText: String
     public var chats: [MonitoredChat]
-    public var skin: AppSkin
 
     public init(
         checkIntervalSeconds: TimeInterval = AppSettings.defaultInterval,
         commandText: String = AppSettings.defaultCommand,
-        chats: [MonitoredChat] = [],
-        skin: AppSkin = AppSettings.defaultSkin
+        chats: [MonitoredChat] = []
     ) {
         self.checkIntervalSeconds = Self.clampedInterval(checkIntervalSeconds)
         self.commandText = commandText
         self.chats = chats
-        self.skin = skin
     }
 
     public static func clampedInterval(_ value: TimeInterval) -> TimeInterval {
         min(max(value, 30), 86_400)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case checkIntervalSeconds
-        case commandText
-        case chats
-        case skin
-    }
-
-    /// Старые `settings.json` не содержали ключ `skin`. При чтении таких файлов
-    /// используется нативный стиль macOS, поэтому обновление не сбрасывает чаты.
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        checkIntervalSeconds = Self.clampedInterval(
-            try container.decodeIfPresent(TimeInterval.self, forKey: .checkIntervalSeconds)
-                ?? Self.defaultInterval
-        )
-        commandText = try container.decodeIfPresent(String.self, forKey: .commandText)
-            ?? Self.defaultCommand
-        chats = try container.decodeIfPresent([MonitoredChat].self, forKey: .chats) ?? []
-        skin = try container.decodeIfPresent(AppSkin.self, forKey: .skin) ?? Self.defaultSkin
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(checkIntervalSeconds, forKey: .checkIntervalSeconds)
-        try container.encode(commandText, forKey: .commandText)
-        try container.encode(chats, forKey: .chats)
-        try container.encode(skin, forKey: .skin)
     }
 }
 

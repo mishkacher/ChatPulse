@@ -175,16 +175,21 @@ export function planTabRecovery({ tab, snapshot, chat, intervalMinutes, now = Da
   if (!tab || !Number.isInteger(tab.id)) return { refresh: true, reason: "missing-tab" };
   if (tab.discarded === true) return { refresh: true, reason: "discarded-tab" };
   if (tab.frozen === true) return { refresh: true, reason: "frozen-tab" };
+
+  // Никогда не обновляем активную вкладку автоматически: пользователь может читать,
+  // выделять текст или работать с интерфейсом, даже если content script временно недоступен.
+  if (tab.active === true) return { refresh: false, reason: null };
   if (!snapshot) return { refresh: true, reason: "content-unreachable" };
+
+  const hasDraft = snapshot.hasDraft === true;
+  if (hasDraft) return { refresh: false, reason: null };
   if (snapshot.errorDetected) return { refresh: true, reason: "page-error" };
 
-  const active = tab.active === true;
-  const hasDraft = snapshot.hasDraft === true;
   const generationAgeMs = finiteNonNegative(snapshot.generationAgeMs);
-  if (!active && !hasDraft && snapshot.isGenerating && generationAgeMs >= STUCK_GENERATION_MS) {
+  if (snapshot.isGenerating && generationAgeMs >= STUCK_GENERATION_MS) {
     return { refresh: true, reason: "stuck-generation" };
   }
-  if (active || hasDraft || snapshot.isGenerating) return { refresh: false, reason: null };
+  if (snapshot.isGenerating) return { refresh: false, reason: null };
 
   const lastRefreshMs = timestampOrZero(chat?.lastHardRefreshAt);
   const elapsedMs = Math.max(0, now - lastRefreshMs);

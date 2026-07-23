@@ -1,21 +1,21 @@
-name: Apply locally verified release
+name: Apply locally verified ChatPulse 0.5.4
 
 on:
   pull_request:
     paths:
-      - ".release-payload/**"
-      - ".github/workflows/apply-local-release.yml"
+      - ".release/apply-0.5.4"
 
 permissions:
   contents: write
+  issues: read
 
 concurrency:
-  group: chatpulse-local-release-${{ github.event.pull_request.number }}
+  group: chatpulse-0.5.4-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply-local-release:
-    if: github.head_ref == 'feature/health-center-0.5.3'
+    if: github.head_ref == 'feature/stop-phrase-0.5.4'
     name: Единичная удалённая интеграция
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -32,14 +32,40 @@ jobs:
         with:
           node-version: 22
 
-      - name: Проверка и распаковка локального payload
+      - name: Восстановление проверенного локального пакета
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$(find .release-payload -name 'part-*.txt' | wc -l | tr -d ' ')" = "12"
-          cat .release-payload/part-*.txt | base64 --decode > /tmp/chatpulse-0.5.3.tar.gz
-          echo "2773caf38a801fdc50599a93019acd318de4eeb38ca15d18cef040db0034184a  /tmp/chatpulse-0.5.3.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/chatpulse-0.5.3.tar.gz -C .
+          gh api "repos/${GITHUB_REPOSITORY}/issues/14" --jq '.body' > /tmp/chatpulse-0.5.4.b64
+          gh api "repos/${GITHUB_REPOSITORY}/issues/14/comments" --paginate --slurp \
+            --jq 'add | sort_by(.id)[] | .body' >> /tmp/chatpulse-0.5.4.b64
+          base64 --decode /tmp/chatpulse-0.5.4.b64 > /tmp/chatpulse-0.5.4.tar.gz
+          echo "f1a702c1bfab1c167b486bd6d7c8a722eb1800ae58c58d1b45c9a8730a7748f5  /tmp/chatpulse-0.5.4.tar.gz" | sha256sum -c -
+          python - <<'PY'
+          from pathlib import PurePosixPath
+          import tarfile
+
+          archive = "/tmp/chatpulse-0.5.4.tar.gz"
+          allowed_roots = {
+              ".github", "CHANGELOG.md", "README.md", "chrome-extension",
+              "package.json", "scripts", "tests",
+          }
+          with tarfile.open(archive, "r:gz") as bundle:
+              members = bundle.getmembers()
+              if len(members) != 26:
+                  raise SystemExit(f"Unexpected payload member count: {len(members)}")
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts or not path.parts:
+                      raise SystemExit(f"Unsafe payload path: {member.name}")
+                  if path.parts[0] not in allowed_roots:
+                      raise SystemExit(f"Unexpected payload root: {member.name}")
+                  if not member.isfile():
+                      raise SystemExit(f"Only regular files are allowed: {member.name}")
+              bundle.extractall(".", filter="data")
+          PY
 
       - name: Минимальный удалённый gate
         run: npm run audit:ci
@@ -49,38 +75,41 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum -c ChatPulse-Chrome-v0.5.3-beta.zip.sha256
-          test "$(sha256sum ChatPulse-Chrome-v0.5.3-beta.zip | awk '{print $1}')" = "f3a67ae4ac13d3bbd11fb874337dbb7fa859f440cd6548b0a2d542600c19a5c7"
+          sha256sum -c ChatPulse-Chrome-v0.5.4-beta.zip.sha256
+          test "$(sha256sum ChatPulse-Chrome-v0.5.4-beta.zip | awk '{print $1}')" = "64b1285a767dcebc35b34d515c1b3cb6161000f39a19f4daa0c1cc827b4c4ed3"
 
-      - name: Проверка отсутствия секретов
+      - name: Проверка разрешений и отсутствия секретов
         shell: bash
         run: |
           set -euo pipefail
           ! grep -RIE "API[_-]?KEY|CLIENT[_-]?SECRET|BEGIN (RSA|OPENSSH) PRIVATE KEY" chrome-extension tests scripts
+          test ! -d chrome-extension/node_modules
+          test ! -f chrome-extension/package-lock.json
 
-      - name: Сохранение проверенного артефакта
+      - name: Сохранение артефакта
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/chatpulse-artifact
-          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip /tmp/chatpulse-artifact/
-          cp dist/ChatPulse-Chrome-v0.5.3-beta.zip.sha256 /tmp/chatpulse-artifact/
+          cp dist/ChatPulse-Chrome-v0.5.4-beta.zip /tmp/chatpulse-artifact/
+          cp dist/ChatPulse-Chrome-v0.5.4-beta.zip.sha256 /tmp/chatpulse-artifact/
 
-      - name: Публикация продуктового commit
+      - name: Публикация одного продуктового commit
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf dist .release-payload .github/workflows/apply-local-release.yml
+          rm -rf dist .release
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Добавить центр здоровья и circuit breaker ChatPulse 0.5.3"
-          git push origin HEAD:${{ github.head_ref }}
+          git diff --cached --check
+          git commit -m "Добавить стоп-фразу ChatPulse 0.5.4"
+          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Публикация beta-артефакта
         uses: actions/upload-artifact@v4
         with:
-          name: ChatPulse-Chrome-v0.5.3-beta
+          name: ChatPulse-Chrome-v0.5.4-beta
           path: /tmp/chatpulse-artifact/*
           if-no-files-found: error
           retention-days: 30

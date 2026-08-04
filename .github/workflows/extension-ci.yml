@@ -17,7 +17,7 @@ jobs:
   apply-local-release:
     if: github.head_ref == 'feature/stop-phrase-0.5.4'
     name: Единичная удалённая интеграция
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, fast]
     timeout-minutes: 10
 
     steps:
